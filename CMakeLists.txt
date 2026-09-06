@@ -21,3 +21,10 @@ add_executable(AdaptiveCoreTests
 )
 
 add_test(NAME AdaptiveCoreTests COMMAND AdaptiveCoreTests)
+
+add_executable(DatasetGeneratorTests
+    tests/DatasetGeneratorTests.cpp
+    src/benchmark/DatasetGenerator.cpp
+)
+
+add_test(NAME DatasetGeneratorTests COMMAND DatasetGeneratorTests)
