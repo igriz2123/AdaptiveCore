@@ -143,6 +143,59 @@ void test_b_plus_tree_recursive_internal_splits() {
     assert(expected_key == 25);
 }
 
+void test_b_plus_tree_range_queries() {
+    BPlusTree single_leaf_tree(4);
+    single_leaf_tree.insert(30, "thirty");
+    single_leaf_tree.insert(10, "ten");
+    single_leaf_tree.insert(20, "twenty");
+
+    const auto inside_one_leaf = single_leaf_tree.range(15, 25);
+    assert(inside_one_leaf.size() == 1);
+    assert(inside_one_leaf[0].first == 20);
+
+    BPlusTree multi_leaf_tree(3);
+    multi_leaf_tree.insert(40, "forty");
+    multi_leaf_tree.insert(10, "ten");
+    multi_leaf_tree.insert(30, "thirty");
+    multi_leaf_tree.insert(20, "twenty");
+    multi_leaf_tree.insert(50, "fifty");
+
+    const auto spanning_leaves = multi_leaf_tree.range(15, 45);
+    assert(spanning_leaves.size() == 3);
+    assert(spanning_leaves[0].first == 20);
+    assert(spanning_leaves[1].first == 30);
+    assert(spanning_leaves[2].first == 40);
+    assert(spanning_leaves[0].first < spanning_leaves[1].first);
+    assert(spanning_leaves[1].first < spanning_leaves[2].first);
+
+    const auto exact_boundaries = multi_leaf_tree.range(20, 40);
+    assert(exact_boundaries.size() == 3);
+    assert(exact_boundaries.front().first == 20);
+    assert(exact_boundaries.back().first == 40);
+
+    const auto missing_boundaries = multi_leaf_tree.range(21, 39);
+    assert(missing_boundaries.size() == 1);
+    assert(missing_boundaries[0].first == 30);
+
+    assert(multi_leaf_tree.range(100, 200).empty());
+    assert(multi_leaf_tree.range(45, 15).empty());
+}
+
+void test_b_plus_tree_range_across_internal_levels() {
+    BPlusTree tree(2);
+    for (int key = 1; key <= 24; ++key) {
+        tree.insert(key, std::to_string(key));
+    }
+
+    const auto results = tree.range(5, 20);
+    assert(results.size() == 16);
+    for (std::size_t index = 0; index < results.size(); ++index) {
+        const int expected_key = static_cast<int>(index) + 5;
+        assert(results[index].first == expected_key);
+        assert(results[index].second == std::to_string(expected_key));
+    }
+}
+
 void test_hash_index_point_operations() {
     HashIndex index;
 
@@ -201,6 +254,8 @@ int main() {
     test_b_plus_tree_duplicate_update_does_not_split();
     test_b_plus_tree_root_internal_split();
     test_b_plus_tree_recursive_internal_splits();
+    test_b_plus_tree_range_queries();
+    test_b_plus_tree_range_across_internal_levels();
     test_hash_index_point_operations();
     test_hash_index_range_query();
     test_storage_engine_api();

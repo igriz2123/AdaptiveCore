@@ -88,8 +88,44 @@ bool BPlusTree::erase(int) {
     throw std::logic_error("BPlusTree deletion is not implemented yet");
 }
 
-std::vector<Index::Entry> BPlusTree::range(int, int) const {
-    throw std::logic_error("BPlusTree range queries are not implemented yet");
+std::vector<Index::Entry> BPlusTree::range(int lower_key, int upper_key) const {
+    std::vector<Entry> results;
+    if (lower_key > upper_key) {
+        return results;
+    }
+
+    const Node* current = root_.get();
+    while (!current->is_leaf) {
+        const auto* internal = static_cast<const InternalNode*>(current);
+        const auto child_position =
+            std::upper_bound(internal->keys.begin(), internal->keys.end(),
+                             lower_key) -
+            internal->keys.begin();
+        current = internal->children[child_position].get();
+    }
+
+    const auto* leaf = static_cast<const LeafNode*>(current);
+    auto entry = std::lower_bound(
+        leaf->entries.begin(), leaf->entries.end(), lower_key,
+        [](const Entry& item, int searched_key) {
+            return item.first < searched_key;
+        });
+
+    while (leaf != nullptr) {
+        for (; entry != leaf->entries.end(); ++entry) {
+            if (entry->first > upper_key) {
+                return results;
+            }
+            results.push_back(*entry);
+        }
+
+        leaf = leaf->next_leaf;
+        if (leaf != nullptr) {
+            entry = leaf->entries.begin();
+        }
+    }
+
+    return results;
 }
 
 std::size_t BPlusTree::size() const {
