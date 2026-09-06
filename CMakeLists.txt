@@ -55,6 +55,18 @@ add_executable(PGMIndexTests
 
 add_test(NAME PGMIndexTests COMMAND PGMIndexTests)
 
+add_executable(AdaptiveIndexTests
+    tests/AdaptiveIndexTests.cpp
+    src/adaptive/AdaptiveIndex.cpp
+    src/adaptive/AdaptivePolicy.cpp
+    src/adaptive/WorkloadAnalyzer.cpp
+    src/index/BPlusTree.cpp
+    src/index/HashIndex.cpp
+    src/index/PGMIndex.cpp
+)
+
+add_test(NAME AdaptiveIndexTests COMMAND AdaptiveIndexTests)
+
 add_executable(AdaptiveCoreBenchmark
     src/benchmark/BenchmarkMain.cpp
     src/benchmark/BenchmarkReporter.cpp
