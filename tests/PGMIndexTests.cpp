@@ -220,6 +220,78 @@ void test_insert_rebuilds_multiple_segments() {
     }
 }
 
+void test_erase_empty_and_missing_key() {
+    PGMIndex empty_index;
+    assert(!empty_index.erase(10));
+    assert(empty_index.size() == 0);
+    assert(empty_index.segments().empty());
+
+    PGMIndex index(0);
+    index.insert(10, "ten");
+    index.insert(20, "twenty");
+    const auto segments_before_miss = index.segments();
+    assert(!index.erase(15));
+    assert(index.size() == 2);
+    assert(index.segments().size() == segments_before_miss.size());
+    assert(index.find(10).value() == "ten");
+    assert(index.find(20).value() == "twenty");
+}
+
+void test_erase_boundaries_and_middle() {
+    PGMIndex index(0);
+    index.insert(10, "ten");
+    index.insert(20, "twenty");
+    index.insert(30, "thirty");
+    index.insert(40, "forty");
+
+    assert(index.erase(10));
+    assert(index.size() == 3);
+    assert(!index.find(10).has_value());
+    assert(index.find(20).value() == "twenty");
+
+    assert(index.erase(30));
+    assert(index.size() == 2);
+    assert(!index.find(30).has_value());
+    assert(index.find(20).value() == "twenty");
+    assert(index.find(40).value() == "forty");
+
+    assert(index.erase(40));
+    assert(index.size() == 1);
+    assert(!index.find(40).has_value());
+    assert(index.find(20).value() == "twenty");
+}
+
+void test_erase_multiple_segments_and_all_keys() {
+    PGMIndex index(0);
+    for (const auto& entry : std::vector<Index::Entry>{{0, "zero"},
+                                                        {1, "one"},
+                                                        {2, "two"},
+                                                        {100, "one hundred"},
+                                                        {101, "one hundred one"},
+                                                        {102, "one hundred two"}}) {
+        index.insert(entry.first, entry.second);
+    }
+
+    assert(index.segments().size() == 2);
+    assert(index.erase(1));
+    assert(index.erase(100));
+    assert(index.size() == 4);
+    assert(!index.find(1).has_value());
+    assert(!index.find(100).has_value());
+    assert(index.find(0).value() == "zero");
+    assert(index.find(102).value() == "one hundred two");
+    assert(index.segments().front().starting_position == 0);
+    assert(index.segments().back().ending_position == index.size() - 1);
+
+    assert(index.erase(0));
+    assert(index.erase(2));
+    assert(index.erase(101));
+    assert(index.erase(102));
+    assert(index.size() == 0);
+    assert(index.segments().empty());
+    assert(!index.find(101).has_value());
+}
+
 int main() {
     test_pgm_index_construction();
     test_piecewise_linear_segment_structure();
@@ -236,5 +308,8 @@ int main() {
     test_insert_keeps_entries_sorted_and_rebuilds_model();
     test_insert_updates_without_increasing_size();
     test_insert_rebuilds_multiple_segments();
+    test_erase_empty_and_missing_key();
+    test_erase_boundaries_and_middle();
+    test_erase_multiple_segments_and_all_keys();
     return 0;
 }

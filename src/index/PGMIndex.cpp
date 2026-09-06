@@ -76,8 +76,20 @@ std::optional<std::string> PGMIndex::find(int key) const {
     return entry->second;
 }
 
-bool PGMIndex::erase(int) {
-    throw std::logic_error("PGMIndex deletion is not implemented yet");
+bool PGMIndex::erase(int key) {
+    const auto position = std::lower_bound(
+        entries_.begin(), entries_.end(), key,
+        [](const Entry& item, int searched_key) {
+            return item.first < searched_key;
+        });
+
+    if (position == entries_.end() || position->first != key) {
+        return false;
+    }
+
+    entries_.erase(position);
+    rebuild_model();
+    return true;
 }
 
 std::vector<Index::Entry> PGMIndex::range(int, int) const {
