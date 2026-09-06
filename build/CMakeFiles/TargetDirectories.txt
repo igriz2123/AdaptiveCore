@@ -1,0 +1,3 @@
+C:/Users/akhil/AdaptiveCore/build/CMakeFiles/AdaptiveCore.dir
+C:/Users/akhil/AdaptiveCore/build/CMakeFiles/edit_cache.dir
+C:/Users/akhil/AdaptiveCore/build/CMakeFiles/rebuild_cache.dir
