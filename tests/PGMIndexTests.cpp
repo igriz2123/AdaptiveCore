@@ -337,6 +337,74 @@ void test_range_after_insert_and_erase() {
     assert(after_erase[2].first == 101);
 }
 
+void test_bulk_load_empty() {
+    PGMIndex index;
+    index.insert(10, "ten");
+    const auto rebuilds_before = index.model_rebuild_count_for_testing();
+
+    index.bulk_load({});
+
+    assert(index.size() == 0);
+    assert(index.segments().empty());
+    assert(index.model_rebuild_count_for_testing() == rebuilds_before + 1);
+}
+
+void test_bulk_load_sorted_and_random_input() {
+    PGMIndex sorted_index(0);
+    sorted_index.bulk_load({{10, "ten"}, {20, "twenty"}, {30, "thirty"}});
+    assert(sorted_index.size() == 3);
+    assert(sorted_index.find(10).value() == "ten");
+    assert(sorted_index.find(20).value() == "twenty");
+    assert(sorted_index.find(30).value() == "thirty");
+
+    PGMIndex random_index(0);
+    random_index.bulk_load({{30, "thirty"}, {10, "ten"}, {20, "twenty"}});
+    assert(random_index.size() == 3);
+    const auto sorted_entries = std::vector<Index::Entry>{
+        {10, "ten"}, {20, "twenty"}, {30, "thirty"}};
+    assert(random_index.range(10, 30) == sorted_entries);
+}
+
+void test_bulk_load_duplicate_resolution_matches_insert() {
+    PGMIndex bulk_index(0);
+    bulk_index.bulk_load({{20, "first"}, {10, "ten"}, {20, "second"},
+                          {20, "last"}});
+
+    PGMIndex insert_index(0);
+    insert_index.insert(20, "first");
+    insert_index.insert(10, "ten");
+    insert_index.insert(20, "second");
+    insert_index.insert(20, "last");
+
+    assert(bulk_index.size() == 2);
+    assert(bulk_index.find(20).value() == "last");
+    assert(bulk_index.find(10).value() == "ten");
+    assert(bulk_index.range(10, 20) == insert_index.range(10, 20));
+}
+
+void test_bulk_load_rebuilds_once_and_supports_mutations() {
+    PGMIndex index(0);
+    const std::vector<Index::Entry> entries = {
+        {0, "zero"}, {1, "one"}, {2, "two"}, {100, "one hundred"},
+        {101, "one hundred one"}, {102, "one hundred two"}};
+
+    index.bulk_load(entries);
+    assert(index.model_rebuild_count_for_testing() == 1);
+    assert(index.segments().size() == 2);
+    assert(index.size() == entries.size());
+    assert(index.find(101).value() == "one hundred one");
+
+    const auto expected_range = std::vector<Index::Entry>{
+        {1, "one"}, {2, "two"}, {100, "one hundred"}};
+    assert(index.range(1, 100) == expected_range);
+
+    assert(index.erase(1));
+    index.insert(50, "fifty");
+    assert(!index.find(1).has_value());
+    assert(index.find(50).value() == "fifty");
+    assert(index.size() == entries.size());
+}
+
 int main() {
     test_pgm_index_construction();
     test_piecewise_linear_segment_structure();
@@ -358,5 +426,9 @@ int main() {
     test_erase_multiple_segments_and_all_keys();
     test_range_queries();
     test_range_after_insert_and_erase();
+    test_bulk_load_empty();
+    test_bulk_load_sorted_and_random_input();
+    test_bulk_load_duplicate_resolution_matches_insert();
+    test_bulk_load_rebuilds_once_and_supports_mutations();
     return 0;
 }

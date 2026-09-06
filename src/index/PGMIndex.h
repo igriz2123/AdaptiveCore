@@ -27,7 +27,10 @@ public:
     std::size_t error_bound() const;
     const std::vector<PiecewiseLinearSegment>& segments() const;
 
+    void bulk_load(const std::vector<Entry>& entries);
+
     void load_sorted_entries_for_testing(const std::vector<Entry>& entries);
+    std::size_t model_rebuild_count_for_testing() const;
 
 private:
     void rebuild_model();
@@ -35,4 +38,5 @@ private:
     std::size_t error_bound_;
     std::vector<Entry> entries_;
     std::vector<PiecewiseLinearSegment> segments_;
+    std::size_t model_rebuild_count_;
 };

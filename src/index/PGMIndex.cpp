@@ -5,7 +5,7 @@
 #include <stdexcept>
 
 PGMIndex::PGMIndex(std::size_t error_bound)
-    : error_bound_(error_bound) {}
+    : error_bound_(error_bound), model_rebuild_count_(0) {}
 
 void PGMIndex::insert(int key, const std::string& value) {
     const auto position = std::lower_bound(
@@ -126,6 +126,27 @@ const std::vector<PGMIndex::PiecewiseLinearSegment>& PGMIndex::segments() const 
     return segments_;
 }
 
+void PGMIndex::bulk_load(const std::vector<Entry>& entries) {
+    entries_ = entries;
+    std::stable_sort(entries_.begin(), entries_.end(),
+                     [](const Entry& left, const Entry& right) {
+                         return left.first < right.first;
+                     });
+
+    std::vector<Entry> unique_entries;
+    unique_entries.reserve(entries_.size());
+    for (const auto& entry : entries_) {
+        if (!unique_entries.empty() &&
+            unique_entries.back().first == entry.first) {
+            unique_entries.back().second = entry.second;
+        } else {
+            unique_entries.push_back(entry);
+        }
+    }
+    entries_ = std::move(unique_entries);
+    rebuild_model();
+}
+
 void PGMIndex::load_sorted_entries_for_testing(
     const std::vector<Entry>& entries) {
     entries_ = entries;
@@ -144,6 +165,7 @@ void PGMIndex::load_sorted_entries_for_testing(
 }
 
 void PGMIndex::rebuild_model() {
+    ++model_rebuild_count_;
     segments_.clear();
     if (entries_.empty()) {
         return;
@@ -187,4 +209,8 @@ void PGMIndex::rebuild_model() {
         }
     }
     segments_.push_back(make_segment(segment_start, entries_.size() - 1));
+}
+
+std::size_t PGMIndex::model_rebuild_count_for_testing() const {
+    return model_rebuild_count_;
 }
