@@ -164,6 +164,62 @@ void test_bounded_error_correction() {
     assert(!index.find(9).has_value());
 }
 
+void test_insert_keeps_entries_sorted_and_rebuilds_model() {
+    PGMIndex index(0);
+
+    index.insert(30, "thirty");
+    assert(index.size() == 1);
+    assert(index.segments().size() == 1);
+    assert(index.segments().front().first_key == 30);
+
+    index.insert(10, "ten");
+    index.insert(20, "twenty");
+    index.insert(25, "twenty-five");
+
+    assert(index.size() == 4);
+    assert(index.find(10).value() == "ten");
+    assert(index.find(20).value() == "twenty");
+    assert(index.find(25).value() == "twenty-five");
+    assert(index.find(30).value() == "thirty");
+    assert(index.segments().front().first_key == 10);
+    assert(index.segments().back().last_key == 30);
+    assert(index.segments().front().starting_position == 0);
+    assert(index.segments().back().ending_position == 3);
+}
+
+void test_insert_updates_without_increasing_size() {
+    PGMIndex index(0);
+    index.insert(20, "old");
+    index.insert(10, "ten");
+    index.insert(30, "thirty");
+
+    const auto segment_count_before_update = index.segments().size();
+    index.insert(20, "updated");
+
+    assert(index.size() == 3);
+    assert(index.find(20).value() == "updated");
+    assert(index.find(10).value() == "ten");
+    assert(index.find(30).value() == "thirty");
+    assert(index.segments().size() == segment_count_before_update);
+}
+
+void test_insert_rebuilds_multiple_segments() {
+    PGMIndex index(0);
+    index.insert(0, "zero");
+    index.insert(1, "one");
+    index.insert(2, "two");
+    index.insert(100, "one hundred");
+
+    assert(index.size() == 4);
+    assert(index.segments().size() == 2);
+    for (const auto& entry : std::vector<Index::Entry>{{0, "zero"},
+                                                        {1, "one"},
+                                                        {2, "two"},
+                                                        {100, "one hundred"}}) {
+        assert(index.find(entry.first).value() == entry.second);
+    }
+}
+
 int main() {
     test_pgm_index_construction();
     test_piecewise_linear_segment_structure();
@@ -177,5 +233,8 @@ int main() {
     test_boundary_and_missing_key_searches();
     test_search_across_multiple_segments();
     test_bounded_error_correction();
+    test_insert_keeps_entries_sorted_and_rebuilds_model();
+    test_insert_updates_without_increasing_size();
+    test_insert_rebuilds_multiple_segments();
     return 0;
 }

@@ -7,8 +7,20 @@
 PGMIndex::PGMIndex(std::size_t error_bound)
     : error_bound_(error_bound) {}
 
-void PGMIndex::insert(int, const std::string&) {
-    throw std::logic_error("PGMIndex insertion is not implemented yet");
+void PGMIndex::insert(int key, const std::string& value) {
+    const auto position = std::lower_bound(
+        entries_.begin(), entries_.end(), key,
+        [](const Entry& item, int searched_key) {
+            return item.first < searched_key;
+        });
+
+    if (position != entries_.end() && position->first == key) {
+        position->second = value;
+    } else {
+        entries_.insert(position, {key, value});
+    }
+
+    rebuild_model();
 }
 
 std::optional<std::string> PGMIndex::find(int key) const {
