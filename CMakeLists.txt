@@ -52,4 +52,5 @@ add_executable(AdaptiveCoreBenchmark
     src/benchmark/DatasetGenerator.cpp
     src/index/BPlusTree.cpp
     src/index/HashIndex.cpp
+    src/index/PGMIndex.cpp
 )

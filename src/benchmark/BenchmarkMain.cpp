@@ -2,6 +2,7 @@
 #include "DatasetGenerator.h"
 #include "../index/BPlusTree.h"
 #include "../index/HashIndex.h"
+#include "../index/PGMIndex.h"
 
 #include <cstddef>
 #include <functional>
@@ -108,6 +109,8 @@ int main(int argc, char* argv[]) {
                          [] { return std::make_unique<HashIndex>(); });
             run_workload("BPlusTree", workload,
                          [] { return std::make_unique<BPlusTree>(); });
+            run_workload("PGMIndex", workload,
+                         [] { return std::make_unique<PGMIndex>(); });
         }
     } catch (const std::exception& error) {
         std::cerr << "Benchmark error: " << error.what() << '\n';
