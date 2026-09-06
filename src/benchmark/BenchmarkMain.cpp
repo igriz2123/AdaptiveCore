@@ -5,6 +5,7 @@
 #include "../index/HashIndex.h"
 #include "../index/PGMIndex.h"
 
+#include <chrono>
 #include <cstddef>
 #include <functional>
 #include <iostream>
@@ -59,9 +60,17 @@ void run_workload(
     BenchmarkRunner runner;
 
     const auto insert_result = runner.run_insert(*index, entries);
+    records.push_back(
+        {dataset_size, index_name, workload.name, insert_result});
     const auto lookup_result = runner.run_point_lookup(*index, workload.keys);
+    records.push_back(
+        {dataset_size, index_name, workload.name, lookup_result});
     const auto range_result = runner.run_range_query(*index, range_queries);
+    records.push_back(
+        {dataset_size, index_name, workload.name, range_result});
     const auto delete_result = runner.run_delete(*index, workload.keys);
+    records.push_back(
+        {dataset_size, index_name, workload.name, delete_result});
 
     std::cout << "Index: " << index_name << " | Dataset: " << workload.name
               << " | Size: " << dataset_size << '\n';
@@ -70,14 +79,6 @@ void run_workload(
     print_result(range_result);
     print_result(delete_result);
 
-    records.push_back(
-        {dataset_size, index_name, workload.name, insert_result});
-    records.push_back(
-        {dataset_size, index_name, workload.name, lookup_result});
-    records.push_back(
-        {dataset_size, index_name, workload.name, range_result});
-    records.push_back(
-        {dataset_size, index_name, workload.name, delete_result});
     std::cout << '\n';
 }
 
@@ -114,8 +115,9 @@ std::vector<Workload> make_workloads(std::size_t dataset_size) {
 
 void run_size(std::size_t dataset_size,
               std::vector<BenchmarkRecord>& records) {
-    std::cout << "Dataset size: " << dataset_size << "\n\n";
+    std::cout << "Running dataset size: " << dataset_size << '\n';
     for (const auto& workload : make_workloads(dataset_size)) {
+        std::cout << "Running workload: " << workload.name << '\n';
         run_workload("HashIndex", workload, dataset_size, records,
                      [] { return std::make_unique<HashIndex>(); });
         run_workload("BPlusTree", workload, dataset_size, records,
@@ -129,10 +131,11 @@ void run_size(std::size_t dataset_size,
 struct BenchmarkOptions {
     std::vector<std::size_t> dataset_sizes;
     std::string output_path;
+    bool experiment_mode;
 };
 
 BenchmarkOptions parse_options(int argc, char* argv[]) {
-    BenchmarkOptions options{{64}, {}};
+    BenchmarkOptions options{{64}, {}, false};
     bool size_was_provided = false;
     bool experiment_was_provided = false;
 
@@ -143,6 +146,7 @@ BenchmarkOptions parse_options(int argc, char* argv[]) {
                 throw std::invalid_argument("dataset mode specified more than once");
             }
             options.dataset_sizes = {100, 1000, 5000, 10000};
+            options.experiment_mode = true;
             experiment_was_provided = true;
         } else if (argument == "--output") {
             if (argument_index + 1 >= argc ||
@@ -171,12 +175,22 @@ BenchmarkOptions parse_options(int argc, char* argv[]) {
 }  // namespace
 
 int main(int argc, char* argv[]) {
+    BenchmarkOptions options{{64}, {}, false};
+    std::vector<BenchmarkRecord> records;
     try {
-        const auto options = parse_options(argc, argv);
-        std::vector<BenchmarkRecord> records;
+        options = parse_options(argc, argv);
+        const auto experiment_started = std::chrono::steady_clock::now();
         std::cout << "AdaptiveCore benchmark\n\n";
         for (const auto dataset_size : options.dataset_sizes) {
             run_size(dataset_size, records);
+        }
+        if (options.experiment_mode) {
+            const auto experiment_finished = std::chrono::steady_clock::now();
+            const auto elapsed = std::chrono::duration_cast<
+                std::chrono::milliseconds>(experiment_finished -
+                                           experiment_started);
+            std::cout << "Experiment wall-clock time: " << elapsed.count()
+                      << " ms\n";
         }
         if (!options.output_path.empty()) {
             BenchmarkReporter::write_csv(options.output_path, records);
@@ -185,6 +199,16 @@ int main(int argc, char* argv[]) {
         }
     } catch (const std::exception& error) {
         std::cerr << "Benchmark error: " << error.what() << '\n';
+        if (!options.output_path.empty() && !records.empty()) {
+            try {
+                BenchmarkReporter::write_csv(options.output_path, records);
+                std::cerr << "Partial CSV results written to: "
+                          << options.output_path << '\n';
+            } catch (const std::exception& report_error) {
+                std::cerr << "Unable to write partial CSV results: "
+                          << report_error.what() << '\n';
+            }
+        }
         return 1;
     }
 
