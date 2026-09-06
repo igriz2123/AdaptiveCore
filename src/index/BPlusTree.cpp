@@ -1,6 +1,7 @@
 #include "BPlusTree.h"
 
 #include <algorithm>
+#include <functional>
 #include <stdexcept>
 
 BPlusTree::BPlusTree(std::size_t max_keys_per_node)
@@ -37,12 +38,6 @@ void BPlusTree::insert(int key, const std::string& value) {
         return;
     }
 
-    auto* parent = leaf->parent;
-    if (parent != nullptr && parent->keys.size() >= max_keys_per_node_) {
-        throw std::logic_error(
-            "BPlusTree parent is full; internal splitting is not implemented");
-    }
-
     std::vector<Entry> combined_entries = leaf->entries;
     combined_entries.insert(
         combined_entries.begin() + (position - leaf->entries.begin()),
@@ -59,30 +54,7 @@ void BPlusTree::insert(int key, const std::string& value) {
     leaf->next_leaf = new_leaf.get();
     const int separator = new_leaf->entries.front().first;
 
-    if (parent == nullptr) {
-        auto old_root = std::move(root_);
-        auto new_root = std::make_unique<InternalNode>();
-        auto* new_root_pointer = new_root.get();
-
-        old_root->parent = new_root_pointer;
-        new_leaf->parent = new_root_pointer;
-        new_root->keys.push_back(separator);
-        new_root->children.push_back(std::move(old_root));
-        new_root->children.push_back(std::move(new_leaf));
-        root_ = std::move(new_root);
-    } else {
-        const auto child_position = std::find_if(
-            parent->children.begin(), parent->children.end(),
-            [leaf](const std::unique_ptr<Node>& child) {
-                return child.get() == leaf;
-            });
-        const auto index = child_position - parent->children.begin();
-
-        new_leaf->parent = parent;
-        parent->keys.insert(parent->keys.begin() + index, separator);
-        parent->children.insert(parent->children.begin() + index + 1,
-                                std::move(new_leaf));
-    }
+    add_child_to_parent(leaf, separator, std::move(new_leaf));
 
     ++size_;
 }
@@ -185,4 +157,117 @@ std::vector<std::vector<Index::Entry>> BPlusTree::leaf_chain_for_testing() const
     }
 
     return leaves;
+}
+
+void BPlusTree::add_child_to_parent(Node* left_child,
+                                    int separator,
+                                    std::unique_ptr<Node> right_child) {
+    auto* parent = left_child->parent;
+    if (parent == nullptr) {
+        auto old_root = std::move(root_);
+        auto new_root = std::make_unique<InternalNode>();
+        auto* new_root_pointer = new_root.get();
+
+        old_root->parent = new_root_pointer;
+        right_child->parent = new_root_pointer;
+        new_root->keys.push_back(separator);
+        new_root->children.push_back(std::move(old_root));
+        new_root->children.push_back(std::move(right_child));
+        root_ = std::move(new_root);
+        return;
+    }
+
+    const auto child_position = std::find_if(
+        parent->children.begin(), parent->children.end(),
+        [left_child](const std::unique_ptr<Node>& child) {
+            return child.get() == left_child;
+        });
+    if (child_position == parent->children.end()) {
+        throw std::logic_error("BPlusTree parent-child relationship is invalid");
+    }
+
+    const auto index = child_position - parent->children.begin();
+    right_child->parent = parent;
+    parent->keys.insert(parent->keys.begin() + index, separator);
+    parent->children.insert(parent->children.begin() + index + 1,
+                            std::move(right_child));
+
+    if (parent->keys.size() > max_keys_per_node_) {
+        split_internal(parent);
+    }
+}
+
+void BPlusTree::split_internal(InternalNode* node) {
+    const auto middle = node->keys.size() / 2;
+    const int promoted_separator = node->keys[middle];
+    auto right_node = std::make_unique<InternalNode>();
+
+    right_node->keys.assign(node->keys.begin() + middle + 1,
+                            node->keys.end());
+    for (std::size_t index = middle + 1; index < node->children.size(); ++index) {
+        right_node->children.push_back(std::move(node->children[index]));
+    }
+
+    node->keys.resize(middle);
+    node->children.resize(middle + 1);
+
+    for (auto& child : right_node->children) {
+        child->parent = right_node.get();
+    }
+
+    add_child_to_parent(node, promoted_separator, std::move(right_node));
+}
+
+bool BPlusTree::validate_structure_for_testing() const {
+    std::vector<const LeafNode*> leaves;
+    std::function<bool(const Node*)> validate_node =
+        [&](const Node* node) {
+            if (!std::is_sorted(node->keys.begin(), node->keys.end())) {
+                return false;
+            }
+
+            if (node->is_leaf) {
+                const auto* leaf = static_cast<const LeafNode*>(node);
+                if (!std::is_sorted(
+                        leaf->entries.begin(), leaf->entries.end(),
+                        [](const Entry& left, const Entry& right) {
+                            return left.first < right.first;
+                        })) {
+                    return false;
+                }
+                leaves.push_back(leaf);
+                return true;
+            }
+
+            const auto* internal = static_cast<const InternalNode*>(node);
+            if (internal->children.size() != internal->keys.size() + 1) {
+                return false;
+            }
+
+            for (const auto& child : internal->children) {
+                if (child->parent != internal || !validate_node(child.get())) {
+                    return false;
+                }
+            }
+            return true;
+        };
+
+    if (root_->parent != nullptr || !validate_node(root_.get())) {
+        return false;
+    }
+
+    const Node* current = root_.get();
+    while (!current->is_leaf) {
+        current = static_cast<const InternalNode*>(current)->children.front().get();
+    }
+
+    const auto* leaf = static_cast<const LeafNode*>(current);
+    for (const auto* expected_leaf : leaves) {
+        if (leaf != expected_leaf) {
+            return false;
+        }
+        leaf = leaf->next_leaf;
+    }
+
+    return leaf == nullptr;
 }

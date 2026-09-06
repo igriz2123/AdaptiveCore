@@ -23,6 +23,7 @@ public:
         const std::vector<std::vector<Entry>>& leaf_entries);
 
     std::vector<std::vector<Entry>> leaf_chain_for_testing() const;
+    bool validate_structure_for_testing() const;
 
 private:
     struct InternalNode;
@@ -48,6 +49,11 @@ private:
         std::vector<Entry> entries;
         LeafNode* next_leaf;
     };
+
+    void add_child_to_parent(Node* left_child,
+                             int separator,
+                             std::unique_ptr<Node> right_child);
+    void split_internal(InternalNode* node);
 
     std::size_t max_keys_per_node_;
     std::size_t size_;

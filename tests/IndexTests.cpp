@@ -104,24 +104,43 @@ void test_b_plus_tree_duplicate_update_does_not_split() {
     assert(tree.find(20).value() == "updated");
 }
 
-void test_b_plus_tree_full_parent() {
+void test_b_plus_tree_root_internal_split() {
     BPlusTree tree(2);
     tree.initialize_for_testing(
         {20, 40}, {{{10, "ten"}, {15, "fifteen"}},
                    {{20, "twenty"}, {25, "twenty-five"}},
                    {{40, "forty"}, {45, "forty-five"}}});
 
-    bool threw = false;
-    try {
-        tree.insert(12, "twelve");
-    } catch (const std::logic_error&) {
-        threw = true;
+    tree.insert(12, "twelve");
+
+    assert(tree.size() == 7);
+    assert(tree.find(12).value() == "twelve");
+    assert(tree.find(45).value() == "forty-five");
+    assert(tree.validate_structure_for_testing());
+}
+
+void test_b_plus_tree_recursive_internal_splits() {
+    BPlusTree tree(2);
+
+    for (int key = 1; key <= 24; ++key) {
+        tree.insert(key, std::to_string(key));
     }
 
-    assert(threw);
-    assert(tree.size() == 6);
-    assert(tree.find(10).value() == "ten");
-    assert(!tree.find(12).has_value());
+    assert(tree.size() == 24);
+    assert(tree.validate_structure_for_testing());
+
+    const auto leaves = tree.leaf_chain_for_testing();
+    assert(leaves.size() > 4);
+    int expected_key = 1;
+    for (const auto& leaf : leaves) {
+        for (const auto& entry : leaf) {
+            assert(entry.first == expected_key);
+            assert(entry.second == std::to_string(expected_key));
+            assert(tree.find(expected_key).value() == entry.second);
+            ++expected_key;
+        }
+    }
+    assert(expected_key == 25);
 }
 
 void test_hash_index_point_operations() {
@@ -180,7 +199,8 @@ int main() {
     test_b_plus_tree_root_leaf_split();
     test_b_plus_tree_non_root_leaf_split();
     test_b_plus_tree_duplicate_update_does_not_split();
-    test_b_plus_tree_full_parent();
+    test_b_plus_tree_root_internal_split();
+    test_b_plus_tree_recursive_internal_splits();
     test_hash_index_point_operations();
     test_hash_index_range_query();
     test_storage_engine_api();
