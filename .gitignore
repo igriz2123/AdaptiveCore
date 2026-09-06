@@ -1,2 +1,3 @@
 build/
-*.exeexperiment_results.csv
+*.exe
+experiment_results.csv
