@@ -8,6 +8,7 @@ add_executable(AdaptiveCore
     src/main.cpp
     src/index/BPlusTree.cpp
     src/index/HashIndex.cpp
+    src/index/PGMIndex.cpp
     src/storage/StorageEngine.cpp
 )
 
@@ -37,6 +38,13 @@ add_executable(BenchmarkRunnerTests
 )
 
 add_test(NAME BenchmarkRunnerTests COMMAND BenchmarkRunnerTests)
+
+add_executable(PGMIndexTests
+    tests/PGMIndexTests.cpp
+    src/index/PGMIndex.cpp
+)
+
+add_test(NAME PGMIndexTests COMMAND PGMIndexTests)
 
 add_executable(AdaptiveCoreBenchmark
     src/benchmark/BenchmarkMain.cpp
