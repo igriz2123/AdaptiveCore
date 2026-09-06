@@ -5,7 +5,9 @@
 #include <stdexcept>
 
 PGMIndex::PGMIndex(std::size_t error_bound)
-    : error_bound_(error_bound), model_rebuild_count_(0) {}
+        : error_bound_(error_bound),
+            model_rebuild_count_(0),
+            model_dirty_(false) {}
 
 void PGMIndex::insert(int key, const std::string& value) {
     const auto position = std::lower_bound(
@@ -20,10 +22,14 @@ void PGMIndex::insert(int key, const std::string& value) {
         entries_.insert(position, {key, value});
     }
 
-    rebuild_model();
+    model_dirty_ = true;
 }
 
 std::optional<std::string> PGMIndex::find(int key) const {
+    if (model_dirty_) {
+        rebuild_model();
+    }
+
     if (entries_.empty() || segments_.empty()) {
         return std::nullopt;
     }
@@ -88,7 +94,7 @@ bool PGMIndex::erase(int key) {
     }
 
     entries_.erase(position);
-    rebuild_model();
+    model_dirty_ = true;
     return true;
 }
 
@@ -164,8 +170,9 @@ void PGMIndex::load_sorted_entries_for_testing(
     rebuild_model();
 }
 
-void PGMIndex::rebuild_model() {
+void PGMIndex::rebuild_model() const {
     ++model_rebuild_count_;
+    model_dirty_ = false;
     segments_.clear();
     if (entries_.empty()) {
         return;

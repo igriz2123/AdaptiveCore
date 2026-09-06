@@ -169,7 +169,9 @@ void test_insert_keeps_entries_sorted_and_rebuilds_model() {
 
     index.insert(30, "thirty");
     assert(index.size() == 1);
-    assert(index.segments().size() == 1);
+    assert(index.model_rebuild_count_for_testing() == 0);
+    assert(index.find(30).value() == "thirty");
+    assert(index.model_rebuild_count_for_testing() == 1);
     assert(index.segments().front().first_key == 30);
 
     index.insert(10, "ten");
@@ -177,7 +179,9 @@ void test_insert_keeps_entries_sorted_and_rebuilds_model() {
     index.insert(25, "twenty-five");
 
     assert(index.size() == 4);
+    assert(index.model_rebuild_count_for_testing() == 1);
     assert(index.find(10).value() == "ten");
+    assert(index.model_rebuild_count_for_testing() == 2);
     assert(index.find(20).value() == "twenty");
     assert(index.find(25).value() == "twenty-five");
     assert(index.find(30).value() == "thirty");
@@ -193,14 +197,17 @@ void test_insert_updates_without_increasing_size() {
     index.insert(10, "ten");
     index.insert(30, "thirty");
 
-    const auto segment_count_before_update = index.segments().size();
+    assert(index.model_rebuild_count_for_testing() == 0);
+    assert(index.find(20).value() == "twenty");
+    assert(index.model_rebuild_count_for_testing() == 1);
     index.insert(20, "updated");
 
     assert(index.size() == 3);
+    assert(index.model_rebuild_count_for_testing() == 1);
     assert(index.find(20).value() == "updated");
     assert(index.find(10).value() == "ten");
     assert(index.find(30).value() == "thirty");
-    assert(index.segments().size() == segment_count_before_update);
+    assert(index.model_rebuild_count_for_testing() == 2);
 }
 
 void test_insert_rebuilds_multiple_segments() {
@@ -229,10 +236,10 @@ void test_erase_empty_and_missing_key() {
     PGMIndex index(0);
     index.insert(10, "ten");
     index.insert(20, "twenty");
-    const auto segments_before_miss = index.segments();
+    assert(index.model_rebuild_count_for_testing() == 0);
     assert(!index.erase(15));
     assert(index.size() == 2);
-    assert(index.segments().size() == segments_before_miss.size());
+    assert(index.model_rebuild_count_for_testing() == 0);
     assert(index.find(10).value() == "ten");
     assert(index.find(20).value() == "twenty");
 }
@@ -244,14 +251,19 @@ void test_erase_boundaries_and_middle() {
     index.insert(30, "thirty");
     index.insert(40, "forty");
 
+    assert(index.model_rebuild_count_for_testing() == 0);
     assert(index.erase(10));
     assert(index.size() == 3);
+    assert(index.model_rebuild_count_for_testing() == 0);
     assert(!index.find(10).has_value());
+    assert(index.model_rebuild_count_for_testing() == 1);
     assert(index.find(20).value() == "twenty");
 
     assert(index.erase(30));
     assert(index.size() == 2);
+    assert(index.model_rebuild_count_for_testing() == 1);
     assert(!index.find(30).has_value());
+    assert(index.model_rebuild_count_for_testing() == 2);
     assert(index.find(20).value() == "twenty");
     assert(index.find(40).value() == "forty");
 
@@ -272,11 +284,13 @@ void test_erase_multiple_segments_and_all_keys() {
         index.insert(entry.first, entry.second);
     }
 
-    assert(index.segments().size() == 2);
+    assert(index.model_rebuild_count_for_testing() == 0);
     assert(index.erase(1));
     assert(index.erase(100));
     assert(index.size() == 4);
+    assert(index.model_rebuild_count_for_testing() == 0);
     assert(!index.find(1).has_value());
+    assert(index.model_rebuild_count_for_testing() == 1);
     assert(!index.find(100).has_value());
     assert(index.find(0).value() == "zero");
     assert(index.find(102).value() == "one hundred two");
@@ -393,6 +407,7 @@ void test_bulk_load_rebuilds_once_and_supports_mutations() {
     assert(index.segments().size() == 2);
     assert(index.size() == entries.size());
     assert(index.find(101).value() == "one hundred one");
+    assert(index.model_rebuild_count_for_testing() == 1);
 
     const auto expected_range = std::vector<Index::Entry>{
         {1, "one"}, {2, "two"}, {100, "one hundred"}};
@@ -403,6 +418,30 @@ void test_bulk_load_rebuilds_once_and_supports_mutations() {
     assert(!index.find(1).has_value());
     assert(index.find(50).value() == "fifty");
     assert(index.size() == entries.size());
+}
+
+void test_deferred_rebuild_preserves_all_values() {
+    PGMIndex index(0);
+    for (int key = 0; key < 10; ++key) {
+        index.insert(key, "value-" + std::to_string(key));
+    }
+
+    assert(index.model_rebuild_count_for_testing() == 0);
+    for (int key = 0; key < 10; ++key) {
+        assert(index.find(key).value() == "value-" + std::to_string(key));
+    }
+    assert(index.model_rebuild_count_for_testing() == 1);
+
+    for (int key = 0; key < 5; ++key) {
+        assert(index.erase(key));
+    }
+    assert(index.model_rebuild_count_for_testing() == 1);
+    assert(index.size() == 5);
+    assert(!index.find(0).has_value());
+    assert(index.model_rebuild_count_for_testing() == 2);
+    for (int key = 5; key < 10; ++key) {
+        assert(index.find(key).value() == "value-" + std::to_string(key));
+    }
 }
 
 int main() {
@@ -430,5 +469,6 @@ int main() {
     test_bulk_load_sorted_and_random_input();
     test_bulk_load_duplicate_resolution_matches_insert();
     test_bulk_load_rebuilds_once_and_supports_mutations();
+    test_deferred_rebuild_preserves_all_values();
     return 0;
 }

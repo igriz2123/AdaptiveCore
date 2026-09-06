@@ -33,10 +33,11 @@ public:
     std::size_t model_rebuild_count_for_testing() const;
 
 private:
-    void rebuild_model();
+    void rebuild_model() const;
 
     std::size_t error_bound_;
     std::vector<Entry> entries_;
-    std::vector<PiecewiseLinearSegment> segments_;
-    std::size_t model_rebuild_count_;
+    mutable std::vector<PiecewiseLinearSegment> segments_;
+    mutable std::size_t model_rebuild_count_;
+    mutable bool model_dirty_;
 };
