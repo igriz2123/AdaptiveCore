@@ -1,4 +1,5 @@
 #include "../src/benchmark/BenchmarkRunner.h"
+#include "../src/adaptive/AdaptiveIndex.h"
 #include "../src/index/BPlusTree.h"
 #include "../src/index/HashIndex.h"
 #include "../src/index/PGMIndex.h"
@@ -88,6 +89,7 @@ void test_custom_operation_and_pgm_bulk_load() {
 int main() {
     test_runner_with_index<HashIndex>();
     test_runner_with_index<BPlusTree>();
+    test_runner_with_index<AdaptiveIndex>();
     test_empty_workloads();
     test_custom_operation_and_pgm_bulk_load();
     return 0;

@@ -4,6 +4,7 @@
 #include "../index/BPlusTree.h"
 #include "../index/HashIndex.h"
 #include "../index/PGMIndex.h"
+#include "../adaptive/AdaptiveIndex.h"
 
 #include <chrono>
 #include <cstddef>
@@ -124,6 +125,8 @@ void run_size(std::size_t dataset_size,
                      [] { return std::make_unique<BPlusTree>(); });
         run_workload("PGMIndex", workload, dataset_size, records,
                      [] { return std::make_unique<PGMIndex>(); });
+        run_workload("AdaptiveIndex", workload, dataset_size, records,
+                 [] { return std::make_unique<AdaptiveIndex>(); });
         run_pgm_bulk_load(workload, dataset_size, records);
     }
 }

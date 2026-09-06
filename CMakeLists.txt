@@ -32,6 +32,9 @@ add_test(NAME DatasetGeneratorTests COMMAND DatasetGeneratorTests)
 
 add_executable(BenchmarkRunnerTests
     tests/BenchmarkRunnerTests.cpp
+    src/adaptive/AdaptiveIndex.cpp
+    src/adaptive/AdaptivePolicy.cpp
+    src/adaptive/WorkloadAnalyzer.cpp
     src/benchmark/BenchmarkRunner.cpp
     src/index/BPlusTree.cpp
     src/index/HashIndex.cpp
@@ -69,6 +72,9 @@ add_test(NAME AdaptiveIndexTests COMMAND AdaptiveIndexTests)
 
 add_executable(AdaptiveCoreBenchmark
     src/benchmark/BenchmarkMain.cpp
+    src/adaptive/AdaptiveIndex.cpp
+    src/adaptive/AdaptivePolicy.cpp
+    src/adaptive/WorkloadAnalyzer.cpp
     src/benchmark/BenchmarkReporter.cpp
     src/benchmark/BenchmarkRunner.cpp
     src/benchmark/DatasetGenerator.cpp
