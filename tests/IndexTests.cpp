@@ -196,6 +196,53 @@ void test_b_plus_tree_range_across_internal_levels() {
     }
 }
 
+void test_b_plus_tree_erase() {
+    BPlusTree single_leaf_tree(4);
+    single_leaf_tree.insert(10, "ten");
+    single_leaf_tree.insert(20, "twenty");
+    single_leaf_tree.insert(30, "thirty");
+
+    assert(single_leaf_tree.erase(20));
+    assert(single_leaf_tree.size() == 2);
+    assert(!single_leaf_tree.find(20).has_value());
+    const auto single_leaf_range = single_leaf_tree.range(10, 30);
+    assert(single_leaf_range.size() == 2);
+    assert(single_leaf_range[0].first == 10);
+    assert(single_leaf_range[1].first == 30);
+
+    assert(!single_leaf_tree.erase(20));
+    assert(!single_leaf_tree.erase(25));
+    assert(single_leaf_tree.size() == 2);
+
+    BPlusTree multi_level_tree(2);
+    for (int key = 1; key <= 24; ++key) {
+        multi_level_tree.insert(key, std::to_string(key));
+    }
+
+    assert(multi_level_tree.erase(1));
+    assert(multi_level_tree.erase(12));
+    assert(multi_level_tree.erase(24));
+    assert(multi_level_tree.size() == 21);
+    assert(!multi_level_tree.find(1).has_value());
+    assert(!multi_level_tree.find(12).has_value());
+    assert(!multi_level_tree.find(24).has_value());
+    assert(multi_level_tree.find(11).value() == "11");
+    assert(multi_level_tree.find(13).value() == "13");
+
+    const auto multi_level_range = multi_level_tree.range(1, 24);
+    assert(multi_level_range.size() == 21);
+    for (std::size_t index = 1; index < multi_level_range.size(); ++index) {
+        assert(multi_level_range[index - 1].first <
+               multi_level_range[index].first);
+    }
+
+    assert(multi_level_tree.erase(2));
+    assert(multi_level_tree.erase(3));
+    assert(multi_level_tree.erase(4));
+    assert(multi_level_tree.size() == 18);
+    assert(!multi_level_tree.erase(2));
+}
+
 void test_hash_index_point_operations() {
     HashIndex index;
 
@@ -256,6 +303,7 @@ int main() {
     test_b_plus_tree_recursive_internal_splits();
     test_b_plus_tree_range_queries();
     test_b_plus_tree_range_across_internal_levels();
+    test_b_plus_tree_erase();
     test_hash_index_point_operations();
     test_hash_index_range_query();
     test_storage_engine_api();

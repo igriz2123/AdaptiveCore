@@ -84,8 +84,30 @@ std::optional<std::string> BPlusTree::find(int key) const {
     return entry->second;
 }
 
-bool BPlusTree::erase(int) {
-    throw std::logic_error("BPlusTree deletion is not implemented yet");
+bool BPlusTree::erase(int key) {
+    Node* current = root_.get();
+    while (!current->is_leaf) {
+        auto* internal = static_cast<InternalNode*>(current);
+        const auto child_position =
+            std::upper_bound(internal->keys.begin(), internal->keys.end(), key) -
+            internal->keys.begin();
+        current = internal->children[child_position].get();
+    }
+
+    auto* leaf = static_cast<LeafNode*>(current);
+    const auto entry = std::lower_bound(
+        leaf->entries.begin(), leaf->entries.end(), key,
+        [](const Entry& item, int searched_key) {
+            return item.first < searched_key;
+        });
+
+    if (entry == leaf->entries.end() || entry->first != key) {
+        return false;
+    }
+
+    leaf->entries.erase(entry);
+    --size_;
+    return true;
 }
 
 std::vector<Index::Entry> BPlusTree::range(int lower_key, int upper_key) const {
