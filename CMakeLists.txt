@@ -28,3 +28,12 @@ add_executable(DatasetGeneratorTests
 )
 
 add_test(NAME DatasetGeneratorTests COMMAND DatasetGeneratorTests)
+
+add_executable(BenchmarkRunnerTests
+    tests/BenchmarkRunnerTests.cpp
+    src/benchmark/BenchmarkRunner.cpp
+    src/index/BPlusTree.cpp
+    src/index/HashIndex.cpp
+)
+
+add_test(NAME BenchmarkRunnerTests COMMAND BenchmarkRunnerTests)
