@@ -1,7 +1,128 @@
+#include "../src/index/BPlusTree.h"
 #include "../src/index/HashIndex.h"
 #include "../src/storage/StorageEngine.h"
 
 #include <cassert>
+#include <stdexcept>
+
+void test_b_plus_tree_initial_state() {
+    BPlusTree default_tree;
+    BPlusTree configured_tree(8);
+
+    assert(default_tree.size() == 0);
+    assert(default_tree.max_keys_per_node() == 4);
+    assert(configured_tree.size() == 0);
+    assert(configured_tree.max_keys_per_node() == 8);
+}
+
+void test_b_plus_tree_search() {
+    BPlusTree empty_tree;
+    assert(!empty_tree.find(10).has_value());
+
+    BPlusTree leaf_tree;
+    leaf_tree.insert(20, "twenty");
+    leaf_tree.insert(10, "ten");
+    assert(leaf_tree.size() == 2);
+    assert(leaf_tree.find(10).value() == "ten");
+    assert(!leaf_tree.find(15).has_value());
+
+    BPlusTree internal_tree;
+    internal_tree.initialize_for_testing(
+        {20}, {{{10, "ten"}}, {{20, "twenty"}, {30, "thirty"}}});
+    assert(internal_tree.find(10).value() == "ten");
+    assert(internal_tree.find(30).value() == "thirty");
+    assert(!internal_tree.find(15).has_value());
+    assert(!internal_tree.find(40).has_value());
+}
+
+void test_b_plus_tree_insert_updates_and_counts() {
+    BPlusTree tree(4);
+
+    tree.insert(30, "thirty");
+    tree.insert(10, "ten");
+    tree.insert(20, "twenty");
+    assert(tree.size() == 3);
+    assert(tree.find(10).value() == "ten");
+    assert(tree.find(20).value() == "twenty");
+    assert(tree.find(30).value() == "thirty");
+
+    tree.insert(20, "updated");
+    assert(tree.size() == 3);
+    assert(tree.find(20).value() == "updated");
+}
+
+void test_b_plus_tree_root_leaf_split() {
+    BPlusTree tree(3);
+
+    tree.insert(30, "thirty");
+    tree.insert(10, "ten");
+    tree.insert(20, "twenty");
+    tree.insert(40, "forty");
+
+    const auto leaves = tree.leaf_chain_for_testing();
+    assert(leaves.size() == 2);
+    assert(leaves[0].size() == 2);
+    assert(leaves[0][0].first == 10);
+    assert(leaves[0][1].first == 20);
+    assert(leaves[1].size() == 2);
+    assert(leaves[1][0].first == 30);
+    assert(leaves[1][1].first == 40);
+    assert(tree.size() == 4);
+    assert(tree.find(10).value() == "ten");
+    assert(tree.find(20).value() == "twenty");
+    assert(tree.find(30).value() == "thirty");
+    assert(tree.find(40).value() == "forty");
+}
+
+void test_b_plus_tree_non_root_leaf_split() {
+    BPlusTree tree(3);
+    tree.initialize_for_testing({30}, {{{10, "ten"}, {20, "twenty"}, {25, "twenty-five"}},
+                                      {{30, "thirty"}}});
+
+    tree.insert(15, "fifteen");
+    const auto leaves = tree.leaf_chain_for_testing();
+    assert(leaves.size() == 3);
+    assert(leaves[0][0].first == 10);
+    assert(leaves[0][1].first == 15);
+    assert(leaves[1][0].first == 20);
+    assert(leaves[1][1].first == 25);
+    assert(leaves[2][0].first == 30);
+    assert(tree.size() == 5);
+    assert(tree.find(15).value() == "fifteen");
+    assert(tree.find(25).value() == "twenty-five");
+}
+
+void test_b_plus_tree_duplicate_update_does_not_split() {
+    BPlusTree tree(2);
+    tree.insert(10, "ten");
+    tree.insert(20, "twenty");
+    tree.insert(20, "updated");
+
+    const auto leaves = tree.leaf_chain_for_testing();
+    assert(leaves.size() == 1);
+    assert(tree.size() == 2);
+    assert(tree.find(20).value() == "updated");
+}
+
+void test_b_plus_tree_full_parent() {
+    BPlusTree tree(2);
+    tree.initialize_for_testing(
+        {20, 40}, {{{10, "ten"}, {15, "fifteen"}},
+                   {{20, "twenty"}, {25, "twenty-five"}},
+                   {{40, "forty"}, {45, "forty-five"}}});
+
+    bool threw = false;
+    try {
+        tree.insert(12, "twelve");
+    } catch (const std::logic_error&) {
+        threw = true;
+    }
+
+    assert(threw);
+    assert(tree.size() == 6);
+    assert(tree.find(10).value() == "ten");
+    assert(!tree.find(12).has_value());
+}
 
 void test_hash_index_point_operations() {
     HashIndex index;
@@ -53,6 +174,13 @@ void test_storage_engine_api() {
 }
 
 int main() {
+    test_b_plus_tree_initial_state();
+    test_b_plus_tree_search();
+    test_b_plus_tree_insert_updates_and_counts();
+    test_b_plus_tree_root_leaf_split();
+    test_b_plus_tree_non_root_leaf_split();
+    test_b_plus_tree_duplicate_update_does_not_split();
+    test_b_plus_tree_full_parent();
     test_hash_index_point_operations();
     test_hash_index_range_query();
     test_storage_engine_api();
