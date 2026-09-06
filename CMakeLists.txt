@@ -35,9 +35,18 @@ add_executable(BenchmarkRunnerTests
     src/benchmark/BenchmarkRunner.cpp
     src/index/BPlusTree.cpp
     src/index/HashIndex.cpp
+    src/index/PGMIndex.cpp
 )
 
 add_test(NAME BenchmarkRunnerTests COMMAND BenchmarkRunnerTests)
+
+add_executable(BenchmarkReporterTests
+    tests/BenchmarkReporterTests.cpp
+    src/benchmark/BenchmarkReporter.cpp
+    src/benchmark/BenchmarkRunner.cpp
+)
+
+add_test(NAME BenchmarkReporterTests COMMAND BenchmarkReporterTests)
 
 add_executable(PGMIndexTests
     tests/PGMIndexTests.cpp
@@ -48,6 +57,7 @@ add_test(NAME PGMIndexTests COMMAND PGMIndexTests)
 
 add_executable(AdaptiveCoreBenchmark
     src/benchmark/BenchmarkMain.cpp
+    src/benchmark/BenchmarkReporter.cpp
     src/benchmark/BenchmarkRunner.cpp
     src/benchmark/DatasetGenerator.cpp
     src/index/BPlusTree.cpp

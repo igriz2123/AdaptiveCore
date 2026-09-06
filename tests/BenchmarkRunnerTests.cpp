@@ -1,6 +1,7 @@
 #include "../src/benchmark/BenchmarkRunner.h"
 #include "../src/index/BPlusTree.h"
 #include "../src/index/HashIndex.h"
+#include "../src/index/PGMIndex.h"
 
 #include <cassert>
 #include <chrono>
@@ -61,9 +62,33 @@ void test_empty_workloads() {
     assert_result(runner.run_delete(index, {}), "Delete", 0);
 }
 
+void test_custom_operation_and_pgm_bulk_load() {
+    BenchmarkRunner runner;
+    PGMIndex index;
+    const std::vector<Index::Entry> entries = {
+        {30, "thirty"}, {10, "ten"}, {20, "twenty"}};
+
+    const auto result = runner.run_custom(
+        "BulkLoad", entries.size(),
+        [&index, &entries] { index.bulk_load(entries); });
+
+    assert_result(result, "BulkLoad", entries.size());
+    assert(index.size() == entries.size());
+    assert(index.find(10).value() == "ten");
+    assert(index.find(20).value() == "twenty");
+    assert(index.find(30).value() == "thirty");
+
+    bool executed = false;
+    const auto empty_result = runner.run_custom(
+        "EmptyCustom", 0, [&executed] { executed = true; });
+    assert_result(empty_result, "EmptyCustom", 0);
+    assert(!executed);
+}
+
 int main() {
     test_runner_with_index<HashIndex>();
     test_runner_with_index<BPlusTree>();
     test_empty_workloads();
+    test_custom_operation_and_pgm_bulk_load();
     return 0;
 }

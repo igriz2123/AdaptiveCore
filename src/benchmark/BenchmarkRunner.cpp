@@ -94,3 +94,19 @@ BenchmarkResult BenchmarkRunner::run_delete(
 
     return make_result("Delete", keys.size(), started, finished);
 }
+
+BenchmarkResult BenchmarkRunner::run_custom(
+    const std::string& operation_name,
+    std::size_t operation_count,
+    const std::function<void()>& operation) const {
+    if (operation_count == 0) {
+        return make_empty_result(operation_name.c_str());
+    }
+
+    const auto started = std::chrono::steady_clock::now();
+    operation();
+    const auto finished = std::chrono::steady_clock::now();
+
+    return make_result(operation_name.c_str(), operation_count, started,
+                       finished);
+}

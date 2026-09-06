@@ -1,4 +1,5 @@
 #include "BenchmarkRunner.h"
+#include "BenchmarkReporter.h"
 #include "DatasetGenerator.h"
 #include "../index/BPlusTree.h"
 #include "../index/HashIndex.h"
@@ -50,6 +51,7 @@ void run_workload(
     const std::string& index_name,
     const Workload& workload,
     std::size_t dataset_size,
+    std::vector<BenchmarkRecord>& records,
     const std::function<std::unique_ptr<Index>()>& create_index) {
     auto index = create_index();
     const auto entries = make_entries(workload.keys);
@@ -67,6 +69,32 @@ void run_workload(
     print_result(lookup_result);
     print_result(range_result);
     print_result(delete_result);
+
+    records.push_back(
+        {dataset_size, index_name, workload.name, insert_result});
+    records.push_back(
+        {dataset_size, index_name, workload.name, lookup_result});
+    records.push_back(
+        {dataset_size, index_name, workload.name, range_result});
+    records.push_back(
+        {dataset_size, index_name, workload.name, delete_result});
+    std::cout << '\n';
+}
+
+void run_pgm_bulk_load(const Workload& workload,
+                       std::size_t dataset_size,
+                       std::vector<BenchmarkRecord>& records) {
+    const auto entries = make_entries(workload.keys);
+    PGMIndex bulk_index;
+    BenchmarkRunner runner;
+    const auto bulk_load_result = runner.run_custom(
+        "BulkLoad", entries.size(),
+        [&bulk_index, &entries] { bulk_index.bulk_load(entries); });
+    std::cout << "Index: PGMIndex | Dataset: " << workload.name
+              << " | Size: " << dataset_size << '\n';
+    print_result(bulk_load_result);
+    records.push_back(
+        {dataset_size, "PGMIndex", workload.name, bulk_load_result});
     std::cout << '\n';
 }
 
@@ -84,46 +112,76 @@ std::vector<Workload> make_workloads(std::size_t dataset_size) {
                            clustered_width + 100, 5000)}};
 }
 
-void run_size(std::size_t dataset_size) {
+void run_size(std::size_t dataset_size,
+              std::vector<BenchmarkRecord>& records) {
     std::cout << "Dataset size: " << dataset_size << "\n\n";
     for (const auto& workload : make_workloads(dataset_size)) {
-        run_workload("HashIndex", workload, dataset_size,
+        run_workload("HashIndex", workload, dataset_size, records,
                      [] { return std::make_unique<HashIndex>(); });
-        run_workload("BPlusTree", workload, dataset_size,
+        run_workload("BPlusTree", workload, dataset_size, records,
                      [] { return std::make_unique<BPlusTree>(); });
-        run_workload("PGMIndex", workload, dataset_size,
+        run_workload("PGMIndex", workload, dataset_size, records,
                      [] { return std::make_unique<PGMIndex>(); });
+        run_pgm_bulk_load(workload, dataset_size, records);
     }
 }
 
-std::vector<std::size_t> parse_dataset_sizes(int argc, char* argv[]) {
-    if (argc == 1) {
-        return {64};
-    }
-    if (argc != 2) {
-        throw std::invalid_argument(
-            "usage: AdaptiveCoreBenchmark [dataset_size|--experiment]");
+struct BenchmarkOptions {
+    std::vector<std::size_t> dataset_sizes;
+    std::string output_path;
+};
+
+BenchmarkOptions parse_options(int argc, char* argv[]) {
+    BenchmarkOptions options{{64}, {}};
+    bool size_was_provided = false;
+    bool experiment_was_provided = false;
+
+    for (int argument_index = 1; argument_index < argc; ++argument_index) {
+        const std::string argument = argv[argument_index];
+        if (argument == "--experiment") {
+            if (size_was_provided || experiment_was_provided) {
+                throw std::invalid_argument("dataset mode specified more than once");
+            }
+            options.dataset_sizes = {100, 1000, 5000, 10000};
+            experiment_was_provided = true;
+        } else if (argument == "--output") {
+            if (argument_index + 1 >= argc ||
+                std::string(argv[argument_index + 1]).empty()) {
+                throw std::invalid_argument("--output requires a file path");
+            }
+            options.output_path = argv[++argument_index];
+        } else if (!size_was_provided && !experiment_was_provided) {
+            const auto parsed_size = std::stoull(argument);
+            if (parsed_size == 0) {
+                throw std::invalid_argument(
+                    "dataset_size must be greater than zero");
+            }
+            options.dataset_sizes = {static_cast<std::size_t>(parsed_size)};
+            size_was_provided = true;
+        } else {
+            throw std::invalid_argument(
+                "usage: AdaptiveCoreBenchmark [dataset_size|--experiment] "
+                "[--output output.csv]");
+        }
     }
 
-    if (std::string(argv[1]) == "--experiment") {
-        return {100, 1000, 5000, 10000};
-    }
-
-    const auto parsed_size = std::stoull(argv[1]);
-    if (parsed_size == 0) {
-        throw std::invalid_argument("dataset_size must be greater than zero");
-    }
-    return {static_cast<std::size_t>(parsed_size)};
+    return options;
 }
 
 }  // namespace
 
 int main(int argc, char* argv[]) {
     try {
-        const auto dataset_sizes = parse_dataset_sizes(argc, argv);
+        const auto options = parse_options(argc, argv);
+        std::vector<BenchmarkRecord> records;
         std::cout << "AdaptiveCore benchmark\n\n";
-        for (const auto dataset_size : dataset_sizes) {
-            run_size(dataset_size);
+        for (const auto dataset_size : options.dataset_sizes) {
+            run_size(dataset_size, records);
+        }
+        if (!options.output_path.empty()) {
+            BenchmarkReporter::write_csv(options.output_path, records);
+            std::cout << "CSV results written to: " << options.output_path
+                      << '\n';
         }
     } catch (const std::exception& error) {
         std::cerr << "Benchmark error: " << error.what() << '\n';

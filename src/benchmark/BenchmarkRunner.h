@@ -4,6 +4,8 @@
 
 #include <chrono>
 #include <cstddef>
+#include <functional>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -31,4 +33,8 @@ public:
 
     BenchmarkResult run_delete(Index& index,
                                const std::vector<int>& keys) const;
+
+    BenchmarkResult run_custom(const std::string& operation_name,
+                               std::size_t operation_count,
+                               const std::function<void()>& operation) const;
 };
