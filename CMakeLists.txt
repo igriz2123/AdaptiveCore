@@ -4,4 +4,18 @@ project(AdaptiveCore)
 
 set(CMAKE_CXX_STANDARD 17)
 
-add_executable(AdaptiveCore src/main.cpp)
+add_executable(AdaptiveCore
+    src/main.cpp
+    src/index/HashIndex.cpp
+    src/storage/StorageEngine.cpp
+)
+
+enable_testing()
+
+add_executable(AdaptiveCoreTests
+    tests/IndexTests.cpp
+    src/index/HashIndex.cpp
+    src/storage/StorageEngine.cpp
+)
+
+add_test(NAME AdaptiveCoreTests COMMAND AdaptiveCoreTests)
