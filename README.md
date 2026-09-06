@@ -1,884 +1,281 @@
-\# AdaptiveCore
+# AdaptiveCore
 
+AdaptiveCore is a C++17 research and teaching prototype for adaptive indexing. It implements three individual indexes, an adaptive facade that selects among them from recent workload counts, reproducible workload generation, benchmarking, CSV reporting, and Python visualization.
 
+The project is intended for controlled experiments and education. It is not a production database.
 
-AdaptiveCore is a C++ project that implements and benchmarks multiple index and data-structure approaches. The project currently includes a hash-based index, a B+ tree, and a PGM-inspired learned index.
+## Architecture
 
+### Common Index Interface
 
+[`src/index/Index.h`](src/index/Index.h) defines the common interface:
 
-The goal of the project is to provide a controlled environment for implementing these indexing approaches and comparing their behavior under different dataset sizes, workloads, and operations.
+- `insert(int key, const std::string& value)`
+- `find(int key)`
+- `erase(int key)`
+- `range(int lower_key, int upper_key)`
+- `size()`
 
+HashIndex, BPlusTree, PGMIndex, and AdaptiveIndex implement this interface. `PGMIndex::bulk_load()` is intentionally PGM-specific and is not part of the common interface.
 
+### Individual Indexes
 
-\## Problem Statement
+#### HashIndex
 
+[`HashIndex`](src/index/HashIndex.h) stores entries in `std::unordered_map`.
 
+- Point operations use hash lookup.
+- Range queries scan all entries and sort matching results.
+- Duplicate inserts update the existing value.
 
-Different indexing techniques have different performance characteristics.
+#### BPlusTree
 
+[`BPlusTree`](src/index/BPlusTree.h) is a custom in-memory B+Tree with:
 
+- Configurable maximum keys per node.
+- Sorted leaf entries.
+- Linked leaves for range queries.
+- Parent pointers.
+- Leaf splitting.
+- Internal-node splitting and recursive propagation.
+- Point lookup, range query, insertion, and simplified deletion.
 
-For example:
+Deletion currently removes entries from leaves without borrowing, merging, or full tree rebalancing.
 
+#### PGMIndex
 
+[`PGMIndex`](src/index/PGMIndex.h) is an educational PGM-inspired learned index. It is not the official PGM library.
 
-\* Hash-based indexes can provide fast point lookups.
+It stores sorted entries and piecewise-linear segments that approximate key-to-position relationships. Point lookup uses a predicted position to create a bounded search window, then verifies the actual key in the sorted vector.
 
-\* Tree-based indexes can support ordered operations and range queries.
+PGMIndex also provides:
 
-\* Learned indexes attempt to model the relationship between keys and their positions.
+- `bulk_load()` for constructing from a complete dataset.
+- Deferred model rebuilding after normal inserts and successful deletes.
+- Immediate model rebuilding after bulk loading.
 
+### Adaptive Layer
 
+The adaptive implementation is under [`src/adaptive`](src/adaptive):
 
-AdaptiveCore implements multiple approaches and provides a benchmark framework for comparing them across controlled workloads.
+- [`IndexChoice.h`](src/adaptive/IndexChoice.h) defines `Hash`, `BPlusTree`, and `PGM` choices.
+- [`WorkloadAnalyzer.h`](src/adaptive/WorkloadAnalyzer.h) counts recent operations in fixed windows.
+- [`AdaptivePolicy.h`](src/adaptive/AdaptivePolicy.h) deterministically selects an index choice.
+- [`AdaptiveIndex.h`](src/adaptive/AdaptiveIndex.h) implements the common `Index` interface.
 
+`AdaptiveIndex` maintains:
 
+- A canonical `std::map<int, std::string>` containing all data.
+- One active concrete index.
+- The current index choice.
+- A fixed-window workload analyzer.
+- A deterministic policy.
 
-The project is intended for experimentation and learning rather than as a production-ready database engine.
+The initial active index is `HashIndex`.
 
+For every operation, AdaptiveIndex updates or queries the active index and records the operation type:
 
+- Insert
+- PointLookup
+- RangeQuery
+- Delete
 
-\## Features
+When a window completes, the policy evaluates the counts:
 
+1. Select `BPlusTree` when `range_queries >= point_lookups` and `range_queries >= writes`, where `writes = inserts + deletes`.
+2. Otherwise select `PGM` when `writes == 0` and there is at least one point lookup.
+3. Otherwise select `Hash`.
 
+The default operation window is 64 operations. The default minimum interval between switches is two completed windows. This cooldown prevents excessive rebuilding and switching.
 
-AdaptiveCore currently provides:
+When a switch is allowed, AdaptiveIndex creates a fresh target index and rebuilds it from canonical data. It does not migrate directly between index implementations. PGM rebuilds use `bulk_load()`; HashIndex and BPlusTree rebuilds use normal inserts.
 
+## Workload Generation
 
+[`DatasetGenerator`](src/benchmark/DatasetGenerator.h) creates deterministic integer-key datasets:
 
-\* Hash-based indexing
+- **Sequential**: consecutive keys starting from a configurable value.
+- **Random**: unique keys sampled with a fixed seed.
+- **Clustered**: unique keys selected from separated key regions, shuffled with a fixed seed.
 
-\* B+ tree indexing
+The benchmark currently uses fixed seeds `2026` for Random and `3030` for Clustered workloads.
 
-\* PGM-inspired learned indexing
+## Benchmark System
 
-\* Insert operations
+[`BenchmarkRunner`](src/benchmark/BenchmarkRunner.h) measures individual operations with `std::chrono::steady_clock`:
 
-\* Point lookups
+- Insert
+- PointLookup
+- RangeQuery
+- Delete
 
-\* Range queries
+It also exposes a generic callable timing method used for PGMIndex BulkLoad. BenchmarkRunner does not know about AdaptiveIndex or PGMIndex-specific APIs.
 
-\* Delete operations
-
-\* PGM bulk loading
-
-\* Deferred PGM model rebuilding
-
-\* Dataset generation
-
-\* Multiple dataset workloads
-
-\* Benchmark execution
-
-\* CSV benchmark reporting
-
-\* Controlled multi-size experiments
-
-\* Unit tests
-
-
-
-\## Architecture
-
-
-
-The project is organized into three main components.
-
-
-
-\### Index Layer
-
-
-
-The index layer contains the implementations of the supported indexing structures:
-
-
-
-\* `HashIndex`
-
-\* `BPlusTree`
-
-\* `PGMIndex`
-
-
-
-The common index interface is defined in:
-
-
+[`BenchmarkReporter`](src/benchmark/BenchmarkReporter.h) writes CSV records with this header:
 
 ```text
-
-src/index/Index.h
-
-```
-
-
-
-\### Benchmark Layer
-
-
-
-The benchmark layer is responsible for:
-
-
-
-\* Generating datasets
-
-\* Running benchmark operations
-
-\* Measuring execution time
-
-\* Running controlled experiments
-
-\* Exporting benchmark results to CSV
-
-
-
-\### Storage Layer
-
-
-
-The project also contains a storage component that provides the foundation for the storage-related parts of the system.
-
-
-
-\## Implemented Indexes
-
-
-
-\### HashIndex
-
-
-
-`HashIndex` is a hash-based index implementation.
-
-
-
-It supports the operations required by the benchmark system:
-
-
-
-\* Insert
-
-\* Point lookup
-
-\* Range query
-
-\* Delete
-
-
-
-Hash-based indexing is generally well suited for point lookups. However, range queries require additional work because hash tables do not naturally maintain key ordering.
-
-
-
-\### BPlusTree
-
-
-
-`BPlusTree` is a tree-based index implementation.
-
-
-
-It supports:
-
-
-
-\* Insert
-
-\* Point lookup
-
-\* Range query
-
-\* Delete
-
-
-
-Because keys are maintained in an ordered structure, tree-based indexes are suitable for operations that depend on key ordering, including range queries.
-
-
-
-\### PGMIndex
-
-
-
-`PGMIndex` is a learned-index-inspired implementation based on a model that relates keys to their approximate positions in sorted data.
-
-
-
-It supports:
-
-
-
-\* Insert
-
-\* Point lookup
-
-\* Range query
-
-\* Delete
-
-\* Bulk loading
-
-
-
-The implementation maintains sorted entries and uses a model to assist lookup operations.
-
-
-
-\## PGM Bulk Loading
-
-
-
-`PGMIndex` supports bulk loading.
-
-
-
-Bulk loading allows the index to be constructed from a complete dataset rather than inserting entries individually.
-
-
-
-This operation is benchmarked separately from normal insertion.
-
-
-
-The distinction is intentional:
-
-
-
-\* `Insert` measures repeated individual insertions.
-
-\* `BulkLoad` measures construction of the PGM index from an already available dataset.
-
-
-
-`BulkLoad` is currently specific to `PGMIndex` and is not included for `HashIndex` or `BPlusTree`.
-
-
-
-\## Deferred PGM Model Rebuilding
-
-
-
-Initially, the PGM model was rebuilt after every insertion or deletion.
-
-
-
-This approach was inefficient because repeated modifications could trigger repeated model reconstruction.
-
-
-
-AdaptiveCore now uses deferred model rebuilding.
-
-
-
-The current behavior is:
-
-
-
-1\. `insert()` modifies the sorted entries and marks the model as dirty.
-
-2\. A successful `erase()` marks the model as dirty.
-
-3\. The model is not immediately rebuilt after every modification.
-
-4\. `find()` checks whether the model is dirty.
-
-5\. If necessary, the model is rebuilt before the lookup.
-
-6\. After rebuilding, the model becomes clean.
-
-7\. `range()` and `size()` do not force a model rebuild.
-
-8\. `bulk\_load()` rebuilds the model immediately.
-
-
-
-This reduces unnecessary rebuilding when multiple modifications occur before a lookup.
-
-
-
-\## Benchmark System
-
-
-
-The benchmark system measures the performance of supported operations.
-
-
-
-The following operations are benchmarked:
-
-
-
-\* `Insert`
-
-\* `PointLookup`
-
-\* `RangeQuery`
-
-\* `Delete`
-
-
-
-These operations are benchmarked for:
-
-
-
-\* `HashIndex`
-
-\* `BPlusTree`
-
-\* `PGMIndex`
-
-
-
-`PGMIndex` additionally supports:
-
-
-
-\* `BulkLoad`
-
-
-
-Bulk loading is measured separately because it represents a different workload from repeated individual insertion.
-
-
-
-The benchmark system includes a generic custom timing mechanism for timing individual callable operations.
-
-
-
-\## Dataset Types
-
-
-
-AdaptiveCore supports multiple workload patterns.
-
-
-
-\### Sequential
-
-
-
-Keys are generated in sequential order.
-
-
-
-This workload represents ordered data.
-
-
-
-\### Random
-
-
-
-Keys are generated in a random order.
-
-
-
-This workload represents less predictable insertion and access patterns.
-
-
-
-\### Clustered
-
-
-
-Keys are generated in clustered patterns.
-
-
-
-This workload is intended to represent data distributions where values are concentrated in particular regions.
-
-
-
-\## Building the Project
-
-
-
-\### Requirements
-
-
-
-The project uses:
-
-
-
-\* C++
-
-\* CMake
-
-\* Ninja
-
-
-
-The project has been developed and tested using Windows PowerShell.
-
-
-
-\### Configure
-
-
-
-From the project directory:
-
-
-
-```powershell
-
-cmake -S . -B build -G Ninja -DCMAKE\_BUILD\_TYPE=Release
-
-```
-
-
-
-\### Build
-
-
-
-```powershell
-
-cmake --build build --config Release
-
-```
-
-
-
-\## Running Tests
-
-
-
-Run all tests using:
-
-
-
-```powershell
-
-ctest --test-dir build --output-on-failure
-
-```
-
-
-
-The project currently includes tests for:
-
-
-
-\* Core index functionality
-
-\* Dataset generation
-
-\* Benchmark execution
-
-\* Benchmark reporting
-
-\* PGMIndex behavior
-
-
-
-\## Running Benchmarks
-
-
-
-\### Default Benchmark
-
-
-
-```powershell
-
-.\\build\\AdaptiveCoreBenchmark.exe
-
-```
-
-
-
-\### Benchmark With a Specific Dataset Size
-
-
-
-For example:
-
-
-
-```powershell
-
-.\\build\\AdaptiveCoreBenchmark.exe 1000
-
-```
-
-
-
-\### Benchmark With CSV Output
-
-
-
-```powershell
-
-.\\build\\AdaptiveCoreBenchmark.exe 1000 --output benchmark\_results.csv
-
-```
-
-
-
-\## CSV Output
-
-
-
-Benchmark results can be exported to a CSV file.
-
-
-
-The current format is:
-
-
-
-```text
-
 DatasetSize,Index,Dataset,Operation,OperationCount,TotalNanoseconds,AverageNanoseconds
-
 ```
 
+The benchmark executable is [`BenchmarkMain.cpp`](src/benchmark/BenchmarkMain.cpp). It benchmarks:
 
+- HashIndex: Insert, PointLookup, RangeQuery, Delete
+- BPlusTree: Insert, PointLookup, RangeQuery, Delete
+- PGMIndex: Insert, PointLookup, RangeQuery, Delete, BulkLoad
+- AdaptiveIndex: Insert, PointLookup, RangeQuery, Delete
 
-The fields represent:
+BulkLoad is a separate PGMIndex-only operation and does not replace normal Insert.
 
+## Controlled Experiment
 
-
-\* `DatasetSize` — Number of records used in the dataset.
-
-\* `Index` — Index implementation being benchmarked.
-
-\* `Dataset` — Dataset workload type.
-
-\* `Operation` — Operation being measured.
-
-\* `OperationCount` — Number of operations performed.
-
-\* `TotalNanoseconds` — Total measured execution time.
-
-\* `AverageNanoseconds` — Average execution time per operation.
-
-
-
-Generated benchmark result files are not intended to be committed to the repository.
-
-
-
-\## Controlled Experiment
-
-
-
-AdaptiveCore supports a controlled benchmark experiment.
-
-
-
-Run it using:
-
-
+Run the controlled experiment with:
 
 ```powershell
-
-.\\build\\AdaptiveCoreBenchmark.exe --experiment --output experiment\_results.csv
-
+.\build\AdaptiveCoreBenchmark.exe --experiment --output experiment_results.csv
 ```
 
-
-
-The controlled experiment currently uses the following dataset sizes:
-
-
+Dataset sizes:
 
 ```text
-
 100
-
 1000
-
 5000
-
 10000
-
 ```
 
-
-
-The following workloads are tested:
-
-
+Workloads:
 
 ```text
-
 Sequential
-
 Random
-
 Clustered
-
 ```
 
-
-
-\### Operations Per Index
-
-
-
-`HashIndex`:
-
-
-
-\* Insert
-
-\* PointLookup
-
-\* RangeQuery
-
-\* Delete
-
-
-
-`BPlusTree`:
-
-
-
-\* Insert
-
-\* PointLookup
-
-\* RangeQuery
-
-\* Delete
-
-
-
-`PGMIndex`:
-
-
-
-\* Insert
-
-\* PointLookup
-
-\* RangeQuery
-
-\* Delete
-
-\* BulkLoad
-
-
-
-This produces:
-
-
+Expected records:
 
 ```text
-
-4 dataset sizes × 3 workloads × 13 benchmark records
-
+3 workloads * (4 indexes * 4 operations + 1 PGM BulkLoad) * 4 dataset sizes = 204 records
 ```
 
+The extra operation is BulkLoad, which exists only for PGMIndex.
 
+The experiment prints progress for each dataset size and workload and reports total orchestration wall-clock time. Large runs can be slow because normal PGM insertion and deletion still involve expensive sorted-vector/model work.
 
-Expected output:
+## Building
 
+Requirements:
 
+- C++17 compiler
+- CMake 3.20 or newer
+- Ninja
 
-```text
+Configure and build:
 
-156 records
-
+```powershell
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build --config Release
 ```
 
+## Testing
 
+Run all registered tests:
 
-The additional records for `PGMIndex` are caused by its separate `BulkLoad` benchmark.
+```powershell
+ctest --test-dir build --output-on-failure
+```
 
+The current test targets cover:
 
+- Core HashIndex and BPlusTree behavior.
+- PGMIndex model construction, search, mutation, range queries, bulk loading, and deferred rebuilding.
+- Dataset sizes, uniqueness, distributions, and reproducibility.
+- Benchmark timing results and custom operations.
+- CSV reporting.
+- AdaptiveIndex workload analysis, policy decisions, switching, cooldown behavior, and data correctness.
 
-\## Project Structure
+## Running Benchmarks
 
+Default dataset size:
 
+```powershell
+.\build\AdaptiveCoreBenchmark.exe
+```
+
+Explicit dataset size:
+
+```powershell
+.\build\AdaptiveCoreBenchmark.exe 32
+```
+
+CSV output:
+
+```powershell
+.\build\AdaptiveCoreBenchmark.exe 32 --output benchmark_results.csv
+```
+
+The executable continues to print results to the console. CSV output is optional and is created or truncated when requested.
+
+## Benchmark Analysis
+
+The reproducible Python analysis script reads `experiment_results.csv` and writes five PNG graphs:
+
+```powershell
+python scripts/analyze_results.py
+```
+
+Required Python packages:
+
+- `pandas`
+- `matplotlib`
+
+Generated files:
+
+- `results/graphs/point_lookup_performance.png`
+- `results/graphs/range_query_performance.png`
+- `results/graphs/insert_performance.png`
+- `results/graphs/delete_performance.png`
+- `results/graphs/pgm_bulk_load_performance.png`
+
+The graphs compare measured `AverageNanoseconds` values by dataset size and workload. They are descriptive benchmark outputs; they do not establish that one index is universally faster than the others.
+
+## Project Structure
 
 ```text
-
 AdaptiveCore/
-
-│   .gitignore
-
-│   CMakeLists.txt
-
-│   README.md
-
-│
-
-├── data/
-
-├── include/
-
-├── results/
-
-│
-
-├── src/
-
-│   │   main.cpp
-
-│   │
-
-│   ├── benchmark/
-
-│   │   ├── BenchmarkMain.cpp
-
-│   │   ├── BenchmarkReporter.cpp
-
-│   │   ├── BenchmarkReporter.h
-
-│   │   ├── BenchmarkRunner.cpp
-
-│   │   ├── BenchmarkRunner.h
-
-│   │   ├── DatasetGenerator.cpp
-
-│   │   └── DatasetGenerator.h
-
-│   │
-
-│   ├── index/
-
-│   │   ├── BPlusTree.cpp
-
-│   │   ├── BPlusTree.h
-
-│   │   ├── HashIndex.cpp
-
-│   │   ├── HashIndex.h
-
-│   │   ├── Index.h
-
-│   │   ├── PGMIndex.cpp
-
-│   │   └── PGMIndex.h
-
-│   │
-
-│   └── storage/
-
-│       ├── StorageEngine.cpp
-
-│       └── StorageEngine.h
-
-│
-
-└── tests/
-
-&#x20;   ├── BenchmarkReporterTests.cpp
-
-&#x20;   ├── BenchmarkRunnerTests.cpp
-
-&#x20;   ├── DatasetGeneratorTests.cpp
-
-&#x20;   ├── IndexTests.cpp
-
-&#x20;   └── PGMIndexTests.cpp
-
+  CMakeLists.txt
+  README.md
+  src/
+    adaptive/
+      AdaptiveIndex.*
+      AdaptivePolicy.*
+      IndexChoice.h
+      WorkloadAnalyzer.*
+    benchmark/
+      BenchmarkMain.cpp
+      BenchmarkReporter.*
+      BenchmarkRunner.*
+      DatasetGenerator.*
+    index/
+      Index.h
+      HashIndex.*
+      BPlusTree.*
+      PGMIndex.*
+    storage/
+      StorageEngine.*
+    main.cpp
+  tests/
+    AdaptiveIndexTests.cpp
+    BenchmarkReporterTests.cpp
+    BenchmarkRunnerTests.cpp
+    DatasetGeneratorTests.cpp
+    IndexTests.cpp
+    PGMIndexTests.cpp
+  scripts/
+    analyze_results.py
+  results/
+    graphs/
 ```
 
+`StorageEngine` is currently a small HashIndex-backed storage wrapper used by the basic executable smoke test. It is not the backend used by the benchmark or AdaptiveIndex.
 
-
-\## Current Limitations
-
-
-
-AdaptiveCore is currently an experimental and educational project.
-
-
-
-Some limitations include:
-
-
-
-\* The project is not a complete database management system.
-
-\* Benchmark results can vary depending on the machine and execution environment.
-
-\* Benchmark results should not automatically be treated as rigorous scientific conclusions without further statistical analysis.
-
-\* The current benchmark system focuses on controlled workloads and does not represent every possible real-world workload.
-
-\* The implemented PGM index is a project-specific implementation and should not be considered a replacement for a production-grade learned indexing library.
-
-\* The project does not currently include persistent on-disk index storage.
-
-
-
-\## Future Improvements
-
-
-
-Possible future improvements include:
-
-
-
-\* More advanced benchmark analysis
-
-\* Statistical analysis of repeated benchmark runs
-
-\* Graphical visualization of benchmark results
-
-\* Additional dataset distributions
-
-\* Additional index implementations
-
-\* Persistent storage
-
-\* More advanced B+ tree functionality
-
-\* Improved learned-index modeling
-
-\* Memory usage measurements
-
-\* Larger-scale benchmark experiments
-
-\* Automated experiment analysis
-
-
-
-\## Testing Status
-
-
-
-The project has been validated using CTest.
-
-
-
-The latest validation completed successfully with:
-
-
-
-```text
-
-100% tests passed, 0 tests failed out of 5
-
-```
-
-
-
-The controlled benchmark experiment also completed successfully with the expected:
-
-
-
-```text
-
-156 benchmark records
-
-```
-
-
-
-\## License
-
-
-
-No license has currently been specified for this project.
-
-
-
+Generated build files, executables, and benchmark result CSV files are ignored by Git. PNG graphs under `results/graphs/` are generated analysis artifacts.
