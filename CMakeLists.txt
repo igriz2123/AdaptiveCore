@@ -37,3 +37,11 @@ add_executable(BenchmarkRunnerTests
 )
 
 add_test(NAME BenchmarkRunnerTests COMMAND BenchmarkRunnerTests)
+
+add_executable(AdaptiveCoreBenchmark
+    src/benchmark/BenchmarkMain.cpp
+    src/benchmark/BenchmarkRunner.cpp
+    src/benchmark/DatasetGenerator.cpp
+    src/index/BPlusTree.cpp
+    src/index/HashIndex.cpp
+)
