@@ -92,8 +92,26 @@ bool PGMIndex::erase(int key) {
     return true;
 }
 
-std::vector<Index::Entry> PGMIndex::range(int, int) const {
-    throw std::logic_error("PGMIndex range queries are not implemented yet");
+std::vector<Index::Entry> PGMIndex::range(int lower_key, int upper_key) const {
+    std::vector<Entry> results;
+    if (lower_key > upper_key) {
+        return results;
+    }
+
+    const auto first_entry = std::lower_bound(
+        entries_.begin(), entries_.end(), lower_key,
+        [](const Entry& item, int searched_key) {
+            return item.first < searched_key;
+        });
+
+    for (auto entry = first_entry; entry != entries_.end(); ++entry) {
+        if (entry->first > upper_key) {
+            break;
+        }
+        results.push_back(*entry);
+    }
+
+    return results;
 }
 
 std::size_t PGMIndex::size() const {

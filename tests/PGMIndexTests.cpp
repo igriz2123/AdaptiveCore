@@ -292,6 +292,51 @@ void test_erase_multiple_segments_and_all_keys() {
     assert(!index.find(101).has_value());
 }
 
+void test_range_queries() {
+    PGMIndex index(0);
+    index.insert(10, "ten");
+    index.insert(20, "twenty");
+    index.insert(30, "thirty");
+    index.insert(40, "forty");
+
+    const std::vector<Index::Entry> middle_entries = {
+        {20, "twenty"}, {30, "thirty"}};
+    const std::vector<Index::Entry> single_entry = {{30, "thirty"}};
+    const std::vector<Index::Entry> all_entries = {
+        {10, "ten"}, {20, "twenty"}, {30, "thirty"}, {40, "forty"}};
+
+    assert(index.range(20, 30) == middle_entries);
+    assert(index.range(21, 39) == single_entry);
+    assert(index.range(15, 15).empty());
+    assert(index.range(35, 25).empty());
+    assert(index.range(10, 40) == all_entries);
+}
+
+void test_range_after_insert_and_erase() {
+    PGMIndex index(0);
+    index.insert(100, "one hundred");
+    index.insert(0, "zero");
+    index.insert(1, "one");
+    index.insert(2, "two");
+    index.insert(101, "one hundred one");
+    index.insert(102, "one hundred two");
+
+    assert(index.segments().size() == 2);
+    const auto before_erase = index.range(1, 101);
+    assert(before_erase.size() == 4);
+    assert(before_erase[0].first == 1);
+    assert(before_erase[1].first == 2);
+    assert(before_erase[2].first == 100);
+    assert(before_erase[3].first == 101);
+
+    assert(index.erase(100));
+    const auto after_erase = index.range(1, 101);
+    assert(after_erase.size() == 3);
+    assert(after_erase[0].first == 1);
+    assert(after_erase[1].first == 2);
+    assert(after_erase[2].first == 101);
+}
+
 int main() {
     test_pgm_index_construction();
     test_piecewise_linear_segment_structure();
@@ -311,5 +356,7 @@ int main() {
     test_erase_empty_and_missing_key();
     test_erase_boundaries_and_middle();
     test_erase_multiple_segments_and_all_keys();
+    test_range_queries();
+    test_range_after_insert_and_erase();
     return 0;
 }
