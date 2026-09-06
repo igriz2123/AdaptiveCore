@@ -49,6 +49,7 @@ void print_result(const BenchmarkResult& result) {
 void run_workload(
     const std::string& index_name,
     const Workload& workload,
+    std::size_t dataset_size,
     const std::function<std::unique_ptr<Index>()>& create_index) {
     auto index = create_index();
     const auto entries = make_entries(workload.keys);
@@ -61,7 +62,7 @@ void run_workload(
     const auto delete_result = runner.run_delete(*index, workload.keys);
 
     std::cout << "Index: " << index_name << " | Dataset: " << workload.name
-              << '\n';
+              << " | Size: " << dataset_size << '\n';
     print_result(insert_result);
     print_result(lookup_result);
     print_result(range_result);
@@ -69,48 +70,60 @@ void run_workload(
     std::cout << '\n';
 }
 
-std::size_t parse_dataset_size(int argc, char* argv[]) {
+std::vector<Workload> make_workloads(std::size_t dataset_size) {
+    const auto clustered_width = static_cast<int>((dataset_size + 3) / 4);
+
+    return {
+        {"Sequential", DatasetGenerator::generate_sequential(dataset_size,
+                                                              1000)},
+        {"Random", DatasetGenerator::generate_random(
+                        dataset_size, 2026, 100000,
+                        100000 + static_cast<int>(dataset_size * 10))},
+        {"Clustered", DatasetGenerator::generate_clustered(
+                           dataset_size, 3030, 4, clustered_width,
+                           clustered_width + 100, 5000)}};
+}
+
+void run_size(std::size_t dataset_size) {
+    std::cout << "Dataset size: " << dataset_size << "\n\n";
+    for (const auto& workload : make_workloads(dataset_size)) {
+        run_workload("HashIndex", workload, dataset_size,
+                     [] { return std::make_unique<HashIndex>(); });
+        run_workload("BPlusTree", workload, dataset_size,
+                     [] { return std::make_unique<BPlusTree>(); });
+        run_workload("PGMIndex", workload, dataset_size,
+                     [] { return std::make_unique<PGMIndex>(); });
+    }
+}
+
+std::vector<std::size_t> parse_dataset_sizes(int argc, char* argv[]) {
     if (argc == 1) {
-        return 64;
+        return {64};
     }
     if (argc != 2) {
-        throw std::invalid_argument("usage: AdaptiveCoreBenchmark [dataset_size]");
+        throw std::invalid_argument(
+            "usage: AdaptiveCoreBenchmark [dataset_size|--experiment]");
+    }
+
+    if (std::string(argv[1]) == "--experiment") {
+        return {100, 1000, 5000, 10000};
     }
 
     const auto parsed_size = std::stoull(argv[1]);
     if (parsed_size == 0) {
         throw std::invalid_argument("dataset_size must be greater than zero");
     }
-    return static_cast<std::size_t>(parsed_size);
+    return {static_cast<std::size_t>(parsed_size)};
 }
 
 }  // namespace
 
 int main(int argc, char* argv[]) {
     try {
-        const std::size_t dataset_size = parse_dataset_size(argc, argv);
-        const auto clustered_width = static_cast<int>(
-            (dataset_size + 3) / 4);
-
-        const std::vector<Workload> workloads = {
-            {"Sequential", DatasetGenerator::generate_sequential(dataset_size,
-                                                                  1000)},
-            {"Random", DatasetGenerator::generate_random(
-                            dataset_size, 2026, 100000, 100000 +
-                                                       static_cast<int>(dataset_size * 10))},
-            {"Clustered", DatasetGenerator::generate_clustered(
-                               dataset_size, 3030, 4, clustered_width,
-                               clustered_width + 100, 5000)}};
-
-        std::cout << "AdaptiveCore benchmark, dataset size: " << dataset_size
-                  << "\n\n";
-        for (const auto& workload : workloads) {
-            run_workload("HashIndex", workload,
-                         [] { return std::make_unique<HashIndex>(); });
-            run_workload("BPlusTree", workload,
-                         [] { return std::make_unique<BPlusTree>(); });
-            run_workload("PGMIndex", workload,
-                         [] { return std::make_unique<PGMIndex>(); });
+        const auto dataset_sizes = parse_dataset_sizes(argc, argv);
+        std::cout << "AdaptiveCore benchmark\n\n";
+        for (const auto dataset_size : dataset_sizes) {
+            run_size(dataset_size);
         }
     } catch (const std::exception& error) {
         std::cerr << "Benchmark error: " << error.what() << '\n';
