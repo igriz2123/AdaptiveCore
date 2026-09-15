@@ -444,6 +444,14 @@ void test_deferred_rebuild_preserves_all_values() {
     }
 }
 
+void test_diagnostic_metrics_are_safe_for_empty_model() {
+    PGMIndex index(64);
+    assert(index.segment_count() == 0);
+    assert(index.average_prediction_error() == 0.0);
+    assert(index.max_prediction_error() == 0.0);
+    assert(index.model_memory_bytes() == 0);
+}
+
 int main() {
     test_pgm_index_construction();
     test_piecewise_linear_segment_structure();
@@ -470,5 +478,6 @@ int main() {
     test_bulk_load_duplicate_resolution_matches_insert();
     test_bulk_load_rebuilds_once_and_supports_mutations();
     test_deferred_rebuild_preserves_all_values();
+    test_diagnostic_metrics_are_safe_for_empty_model();
     return 0;
 }

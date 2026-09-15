@@ -1,6 +1,7 @@
 #include "BenchmarkRunner.h"
 #include "BenchmarkReporter.h"
 #include "ChangingWorkloadExperiment.h"
+#include "PgmEpsilonExperiment.h"
 #include "DatasetGenerator.h"
 #include "../index/BPlusTree.h"
 #include "../index/HashIndex.h"
@@ -137,19 +138,21 @@ struct BenchmarkOptions {
     std::string output_path;
     bool experiment_mode;
     bool changing_workload_mode;
+    bool pgm_epsilon_mode;
 };
 
 BenchmarkOptions parse_options(int argc, char* argv[]) {
-    BenchmarkOptions options{{64}, {}, false, false};
+    BenchmarkOptions options{{64}, {}, false, false, false};
     bool size_was_provided = false;
     bool experiment_was_provided = false;
     bool changing_workload_was_provided = false;
+    bool pgm_epsilon_was_provided = false;
 
     for (int argument_index = 1; argument_index < argc; ++argument_index) {
         const std::string argument = argv[argument_index];
         if (argument == "--experiment") {
             if (size_was_provided || experiment_was_provided ||
-                changing_workload_was_provided) {
+                changing_workload_was_provided || pgm_epsilon_was_provided) {
                 throw std::invalid_argument("dataset mode specified more than once");
             }
             options.dataset_sizes = {100, 1000, 5000, 10000};
@@ -157,12 +160,20 @@ BenchmarkOptions parse_options(int argc, char* argv[]) {
             experiment_was_provided = true;
         } else if (argument == "--changing-workload") {
             if (size_was_provided || experiment_was_provided ||
-                changing_workload_was_provided) {
+                changing_workload_was_provided || pgm_epsilon_was_provided) {
                 throw std::invalid_argument(
                     "dataset mode specified more than once");
             }
             options.changing_workload_mode = true;
             changing_workload_was_provided = true;
+        } else if (argument == "--pgm-epsilon") {
+            if (size_was_provided || experiment_was_provided ||
+                changing_workload_was_provided || pgm_epsilon_was_provided) {
+                throw std::invalid_argument(
+                    "dataset mode specified more than once");
+            }
+            options.pgm_epsilon_mode = true;
+            pgm_epsilon_was_provided = true;
         } else if (argument == "--output") {
             if (argument_index + 1 >= argc ||
                 std::string(argv[argument_index + 1]).empty()) {
@@ -170,7 +181,8 @@ BenchmarkOptions parse_options(int argc, char* argv[]) {
             }
             options.output_path = argv[++argument_index];
         } else if (!size_was_provided && !experiment_was_provided &&
-               !changing_workload_was_provided) {
+               !changing_workload_was_provided &&
+               !pgm_epsilon_was_provided) {
             const auto parsed_size = std::stoull(argument);
             if (parsed_size == 0) {
                 throw std::invalid_argument(
@@ -181,7 +193,7 @@ BenchmarkOptions parse_options(int argc, char* argv[]) {
         } else {
             throw std::invalid_argument(
                 "usage: AdaptiveCoreBenchmark "
-                "[dataset_size|--experiment|--changing-workload] "
+                "[dataset_size|--experiment|--changing-workload|--pgm-epsilon] "
                 "[--output output.csv]");
         }
     }
@@ -192,7 +204,7 @@ BenchmarkOptions parse_options(int argc, char* argv[]) {
 }  // namespace
 
 int main(int argc, char* argv[]) {
-    BenchmarkOptions options{{64}, {}, false, false};
+    BenchmarkOptions options{{64}, {}, false, false, false};
     std::vector<BenchmarkRecord> records;
     try {
         options = parse_options(argc, argv);
@@ -204,6 +216,16 @@ int main(int argc, char* argv[]) {
             ChangingWorkloadExperiment::write_csv(output_path, records);
             std::cout << "Changing-workload CSV results written to: "
                       << output_path << '\n';
+            return 0;
+        }
+        if (options.pgm_epsilon_mode) {
+            const auto records = PgmEpsilonExperiment::run();
+            const auto output_path = options.output_path.empty()
+                                         ? "pgm_epsilon_results.csv"
+                                         : options.output_path;
+            PgmEpsilonExperiment::write_csv(output_path, records);
+            std::cout << "PGM epsilon experiment: " << records.size()
+                      << " records written to " << output_path << '\n';
             return 0;
         }
         const auto experiment_started = std::chrono::steady_clock::now();

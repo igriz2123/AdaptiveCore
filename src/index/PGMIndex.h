@@ -26,6 +26,10 @@ public:
 
     std::size_t error_bound() const;
     const std::vector<PiecewiseLinearSegment>& segments() const;
+    std::size_t segment_count() const;
+    double average_prediction_error() const;
+    double max_prediction_error() const;
+    std::size_t model_memory_bytes() const;
 
     void bulk_load(const std::vector<Entry>& entries);
 

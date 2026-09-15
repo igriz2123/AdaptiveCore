@@ -54,6 +54,11 @@ PGMIndex also provides:
 - Deferred model rebuilding after normal inserts and successful deletes.
 - Immediate model rebuilding after bulk loading.
 
+The `error_bound` (epsilon) controls the maximum allowed absolute position
+prediction error while building each piecewise-linear segment. Smaller values
+generally require more segments; the epsilon experiment measures the actual
+tradeoff rather than assuming that trend.
+
 ### Adaptive Layer
 
 The adaptive implementation is under [`src/adaptive`](src/adaptive):
@@ -214,6 +219,23 @@ CSV output:
 ```
 
 The executable continues to print results to the console. CSV output is optional and is created or truncated when requested.
+
+### PGM Epsilon Experiment
+
+Run the controlled PGM error-bound experiment with:
+
+```powershell
+.\build\AdaptiveCoreBenchmark.exe --pgm-epsilon --output pgm_epsilon_results.csv
+```
+
+It evaluates epsilon values `1, 2, 4, 8, 16, 32, 64` on dataset sizes
+`1000, 5000, 10000` using deterministic Sequential and Random datasets. Each
+configuration uses the same bulk-load input and point-lookup workload for its
+comparison. The CSV reports bulk-load and point-lookup timing, segment count,
+model memory estimate, average prediction error, and maximum prediction error.
+The prediction errors are calculated from the stored PGM segments and their
+actual dataset positions. No memory metric beyond the segment-model estimate
+is claimed.
 
 ## Benchmark Analysis
 

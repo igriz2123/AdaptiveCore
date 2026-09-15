@@ -58,6 +58,16 @@ add_executable(PGMIndexTests
 
 add_test(NAME PGMIndexTests COMMAND PGMIndexTests)
 
+add_executable(PgmEpsilonExperimentTests
+    tests/PgmEpsilonExperimentTests.cpp
+    src/benchmark/BenchmarkRunner.cpp
+    src/benchmark/DatasetGenerator.cpp
+    src/benchmark/PgmEpsilonExperiment.cpp
+    src/index/PGMIndex.cpp
+)
+
+add_test(NAME PgmEpsilonExperimentTests COMMAND PgmEpsilonExperimentTests)
+
 add_executable(AdaptiveIndexTests
     tests/AdaptiveIndexTests.cpp
     src/adaptive/AdaptiveIndex.cpp
@@ -93,6 +103,7 @@ add_executable(AdaptiveCoreBenchmark
     src/benchmark/BenchmarkRunner.cpp
     src/benchmark/ChangingWorkloadExperiment.cpp
     src/benchmark/DatasetGenerator.cpp
+    src/benchmark/PgmEpsilonExperiment.cpp
     src/index/BPlusTree.cpp
     src/index/HashIndex.cpp
     src/index/PGMIndex.cpp

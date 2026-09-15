@@ -132,6 +132,61 @@ const std::vector<PGMIndex::PiecewiseLinearSegment>& PGMIndex::segments() const 
     return segments_;
 }
 
+std::size_t PGMIndex::segment_count() const {
+    if (model_dirty_) {
+        rebuild_model();
+    }
+    return segments_.size();
+}
+
+double PGMIndex::average_prediction_error() const {
+    if (model_dirty_) {
+        rebuild_model();
+    }
+    if (entries_.empty()) {
+        return 0.0;
+    }
+
+    double total_error = 0.0;
+    for (const auto& segment : segments_) {
+        for (std::size_t position = segment.starting_position;
+             position <= segment.ending_position; ++position) {
+            const auto prediction =
+                segment.slope * static_cast<double>(entries_[position].first) +
+                segment.intercept;
+            total_error +=
+                std::abs(prediction - static_cast<double>(position));
+        }
+    }
+    return total_error / static_cast<double>(entries_.size());
+}
+
+double PGMIndex::max_prediction_error() const {
+    if (model_dirty_) {
+        rebuild_model();
+    }
+    double maximum_error = 0.0;
+    for (const auto& segment : segments_) {
+        for (std::size_t position = segment.starting_position;
+             position <= segment.ending_position; ++position) {
+            const auto prediction =
+                segment.slope * static_cast<double>(entries_[position].first) +
+                segment.intercept;
+            maximum_error = std::max(
+                maximum_error,
+                std::abs(prediction - static_cast<double>(position)));
+        }
+    }
+    return maximum_error;
+}
+
+std::size_t PGMIndex::model_memory_bytes() const {
+    if (model_dirty_) {
+        rebuild_model();
+    }
+    return segments_.size() * sizeof(PiecewiseLinearSegment);
+}
+
 void PGMIndex::bulk_load(const std::vector<Entry>& entries) {
     entries_ = entries;
     std::stable_sort(entries_.begin(), entries_.end(),
