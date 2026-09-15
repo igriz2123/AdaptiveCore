@@ -5,11 +5,19 @@
 #include "WorkloadAnalyzer.h"
 #include "../index/Index.h"
 
+#include <chrono>
 #include <cstddef>
 #include <map>
 #include <memory>
 #include <string>
 #include <vector>
+
+struct AdaptiveSwitchEvent {
+    std::size_t operation_number;
+    IndexChoice old_choice;
+    IndexChoice new_choice;
+    std::chrono::nanoseconds duration;
+};
 
 class AdaptiveIndex final : public Index {
 public:
@@ -28,6 +36,9 @@ public:
     IndexChoice current_choice() const;
     WorkloadSnapshot current_window() const;
     std::size_t completed_windows() const;
+    std::size_t operation_count() const;
+    std::size_t switch_count() const;
+    std::vector<AdaptiveSwitchEvent> switch_events() const;
 
 private:
     void record_and_maybe_switch(OperationType operation) const;
@@ -45,4 +56,6 @@ private:
     std::size_t pgm_error_bound_;
     mutable std::size_t completed_windows_;
     mutable std::size_t windows_since_switch_;
+    mutable std::size_t operation_count_;
+    mutable std::vector<AdaptiveSwitchEvent> switch_events_;
 };

@@ -70,6 +70,20 @@ add_executable(AdaptiveIndexTests
 
 add_test(NAME AdaptiveIndexTests COMMAND AdaptiveIndexTests)
 
+add_executable(ChangingWorkloadExperimentTests
+    tests/ChangingWorkloadExperimentTests.cpp
+    src/adaptive/AdaptiveIndex.cpp
+    src/adaptive/AdaptivePolicy.cpp
+    src/adaptive/WorkloadAnalyzer.cpp
+    src/benchmark/ChangingWorkloadExperiment.cpp
+    src/index/BPlusTree.cpp
+    src/index/HashIndex.cpp
+    src/index/PGMIndex.cpp
+)
+
+add_test(NAME ChangingWorkloadExperimentTests
+         COMMAND ChangingWorkloadExperimentTests)
+
 add_executable(AdaptiveCoreBenchmark
     src/benchmark/BenchmarkMain.cpp
     src/adaptive/AdaptiveIndex.cpp
@@ -77,6 +91,7 @@ add_executable(AdaptiveCoreBenchmark
     src/adaptive/WorkloadAnalyzer.cpp
     src/benchmark/BenchmarkReporter.cpp
     src/benchmark/BenchmarkRunner.cpp
+    src/benchmark/ChangingWorkloadExperiment.cpp
     src/benchmark/DatasetGenerator.cpp
     src/index/BPlusTree.cpp
     src/index/HashIndex.cpp

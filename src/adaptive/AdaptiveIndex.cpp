@@ -4,6 +4,7 @@
 #include "../index/HashIndex.h"
 #include "../index/PGMIndex.h"
 
+#include <chrono>
 #include <stdexcept>
 
 AdaptiveIndex::AdaptiveIndex(
@@ -18,21 +19,25 @@ AdaptiveIndex::AdaptiveIndex(
       bplus_tree_order_(bplus_tree_order),
       pgm_error_bound_(pgm_error_bound),
       completed_windows_(0),
-    windows_since_switch_(0) {}
+            windows_since_switch_(0),
+            operation_count_(0) {}
 
 void AdaptiveIndex::insert(int key, const std::string& value) {
+        ++operation_count_;
     canonical_data_[key] = value;
     active_index_->insert(key, value);
     record_and_maybe_switch(OperationType::Insert);
 }
 
 std::optional<std::string> AdaptiveIndex::find(int key) const {
+    ++operation_count_;
     const auto result = active_index_->find(key);
     record_and_maybe_switch(OperationType::PointLookup);
     return result;
 }
 
 bool AdaptiveIndex::erase(int key) {
+    ++operation_count_;
     const auto existing = canonical_data_.find(key);
     if (existing == canonical_data_.end()) {
         return false;
@@ -49,6 +54,7 @@ bool AdaptiveIndex::erase(int key) {
 
 std::vector<Index::Entry> AdaptiveIndex::range(int lower_key,
                                                int upper_key) const {
+    ++operation_count_;
     const auto result = active_index_->range(lower_key, upper_key);
     record_and_maybe_switch(OperationType::RangeQuery);
     return result;
@@ -70,6 +76,18 @@ std::size_t AdaptiveIndex::completed_windows() const {
     return completed_windows_;
 }
 
+std::size_t AdaptiveIndex::operation_count() const {
+    return operation_count_;
+}
+
+std::size_t AdaptiveIndex::switch_count() const {
+    return switch_events_.size();
+}
+
+std::vector<AdaptiveSwitchEvent> AdaptiveIndex::switch_events() const {
+    return switch_events_;
+}
+
 void AdaptiveIndex::record_and_maybe_switch(OperationType operation) const {
     analyzer_.record(operation);
     maybe_switch();
@@ -86,9 +104,16 @@ void AdaptiveIndex::maybe_switch() const {
 
     if (desired_choice != current_choice_ &&
         windows_since_switch_ >= minimum_windows_between_switches_) {
+        const auto old_choice = current_choice_;
+        const auto switch_started = std::chrono::steady_clock::now();
         active_index_ = rebuild_index(desired_choice);
+        const auto switch_finished = std::chrono::steady_clock::now();
         current_choice_ = desired_choice;
         windows_since_switch_ = 0;
+        switch_events_.push_back({
+            operation_count_, old_choice, desired_choice,
+            std::chrono::duration_cast<std::chrono::nanoseconds>(
+                switch_finished - switch_started)});
     }
 
     analyzer_.reset_window();
