@@ -68,6 +68,21 @@ add_executable(PgmEpsilonExperimentTests
 
 add_test(NAME PgmEpsilonExperimentTests COMMAND PgmEpsilonExperimentTests)
 
+add_executable(MemoryFootprintExperimentTests
+    tests/MemoryFootprintExperimentTests.cpp
+    src/adaptive/AdaptiveIndex.cpp
+    src/adaptive/AdaptivePolicy.cpp
+    src/adaptive/WorkloadAnalyzer.cpp
+    src/benchmark/DatasetGenerator.cpp
+    src/benchmark/MemoryFootprintExperiment.cpp
+    src/index/BPlusTree.cpp
+    src/index/HashIndex.cpp
+    src/index/PGMIndex.cpp
+)
+
+add_test(NAME MemoryFootprintExperimentTests
+         COMMAND MemoryFootprintExperimentTests)
+
 add_executable(AdaptiveIndexTests
     tests/AdaptiveIndexTests.cpp
     src/adaptive/AdaptiveIndex.cpp
@@ -104,6 +119,7 @@ add_executable(AdaptiveCoreBenchmark
     src/benchmark/ChangingWorkloadExperiment.cpp
     src/benchmark/DatasetGenerator.cpp
     src/benchmark/PgmEpsilonExperiment.cpp
+    src/benchmark/MemoryFootprintExperiment.cpp
     src/index/BPlusTree.cpp
     src/index/HashIndex.cpp
     src/index/PGMIndex.cpp

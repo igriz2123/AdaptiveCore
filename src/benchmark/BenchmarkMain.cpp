@@ -2,6 +2,7 @@
 #include "BenchmarkReporter.h"
 #include "ChangingWorkloadExperiment.h"
 #include "PgmEpsilonExperiment.h"
+#include "MemoryFootprintExperiment.h"
 #include "DatasetGenerator.h"
 #include "../index/BPlusTree.h"
 #include "../index/HashIndex.h"
@@ -139,20 +140,23 @@ struct BenchmarkOptions {
     bool experiment_mode;
     bool changing_workload_mode;
     bool pgm_epsilon_mode;
+    bool memory_mode;
 };
 
 BenchmarkOptions parse_options(int argc, char* argv[]) {
-    BenchmarkOptions options{{64}, {}, false, false, false};
+    BenchmarkOptions options{{64}, {}, false, false, false, false};
     bool size_was_provided = false;
     bool experiment_was_provided = false;
     bool changing_workload_was_provided = false;
     bool pgm_epsilon_was_provided = false;
+    bool memory_was_provided = false;
 
     for (int argument_index = 1; argument_index < argc; ++argument_index) {
         const std::string argument = argv[argument_index];
         if (argument == "--experiment") {
             if (size_was_provided || experiment_was_provided ||
-                changing_workload_was_provided || pgm_epsilon_was_provided) {
+                changing_workload_was_provided || pgm_epsilon_was_provided ||
+                memory_was_provided) {
                 throw std::invalid_argument("dataset mode specified more than once");
             }
             options.dataset_sizes = {100, 1000, 5000, 10000};
@@ -160,7 +164,8 @@ BenchmarkOptions parse_options(int argc, char* argv[]) {
             experiment_was_provided = true;
         } else if (argument == "--changing-workload") {
             if (size_was_provided || experiment_was_provided ||
-                changing_workload_was_provided || pgm_epsilon_was_provided) {
+                changing_workload_was_provided || pgm_epsilon_was_provided ||
+                memory_was_provided) {
                 throw std::invalid_argument(
                     "dataset mode specified more than once");
             }
@@ -174,6 +179,15 @@ BenchmarkOptions parse_options(int argc, char* argv[]) {
             }
             options.pgm_epsilon_mode = true;
             pgm_epsilon_was_provided = true;
+        } else if (argument == "--memory" || argument == "--memory-footprint") {
+            if (size_was_provided || experiment_was_provided ||
+                changing_workload_was_provided || pgm_epsilon_was_provided ||
+                memory_was_provided) {
+                throw std::invalid_argument(
+                    "dataset mode specified more than once");
+            }
+            options.memory_mode = true;
+            memory_was_provided = true;
         } else if (argument == "--output") {
             if (argument_index + 1 >= argc ||
                 std::string(argv[argument_index + 1]).empty()) {
@@ -182,7 +196,7 @@ BenchmarkOptions parse_options(int argc, char* argv[]) {
             options.output_path = argv[++argument_index];
         } else if (!size_was_provided && !experiment_was_provided &&
                !changing_workload_was_provided &&
-               !pgm_epsilon_was_provided) {
+                   !pgm_epsilon_was_provided && !memory_was_provided) {
             const auto parsed_size = std::stoull(argument);
             if (parsed_size == 0) {
                 throw std::invalid_argument(
@@ -193,7 +207,8 @@ BenchmarkOptions parse_options(int argc, char* argv[]) {
         } else {
             throw std::invalid_argument(
                 "usage: AdaptiveCoreBenchmark "
-                "[dataset_size|--experiment|--changing-workload|--pgm-epsilon] "
+                "[dataset_size|--experiment|--changing-workload|--pgm-epsilon|"
+                "--memory] "
                 "[--output output.csv]");
         }
     }
@@ -204,7 +219,7 @@ BenchmarkOptions parse_options(int argc, char* argv[]) {
 }  // namespace
 
 int main(int argc, char* argv[]) {
-    BenchmarkOptions options{{64}, {}, false, false, false};
+    BenchmarkOptions options{{64}, {}, false, false, false, false};
     std::vector<BenchmarkRecord> records;
     try {
         options = parse_options(argc, argv);
@@ -225,6 +240,16 @@ int main(int argc, char* argv[]) {
                                          : options.output_path;
             PgmEpsilonExperiment::write_csv(output_path, records);
             std::cout << "PGM epsilon experiment: " << records.size()
+                      << " records written to " << output_path << '\n';
+            return 0;
+        }
+        if (options.memory_mode) {
+            const auto records = MemoryFootprintExperiment::run();
+            const auto output_path = options.output_path.empty()
+                                         ? "memory_results.csv"
+                                         : options.output_path;
+            MemoryFootprintExperiment::write_csv(output_path, records);
+            std::cout << "Memory footprint experiment: " << records.size()
                       << " records written to " << output_path << '\n';
             return 0;
         }

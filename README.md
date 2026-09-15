@@ -237,6 +237,41 @@ The prediction errors are calculated from the stored PGM segments and their
 actual dataset positions. No memory metric beyond the segment-model estimate
 is claimed.
 
+### Memory Footprint Experiment
+
+Run the memory experiment with:
+
+```powershell
+.\build\AdaptiveCoreBenchmark.exe --memory --output memory_results.csv
+```
+
+The experiment compares HashIndex, BPlusTree, PGMIndex, and AdaptiveIndex on
+deterministic Sequential and Random datasets of sizes `1000`, `5000`, `10000`,
+and `50000`. Each index receives the same keys for a given dataset. HashIndex,
+BPlusTree, and AdaptiveIndex are populated with inserts; PGMIndex is populated
+with one bulk load because that is its intended construction path.
+
+Memory is measured with a scoped allocation tracker around index population.
+`TrackedAllocationBytes` is the live dynamically allocated bytes remaining
+after population, while `PeakTrackedAllocationBytes` includes temporary
+allocations during construction. `TotalFootprintBytes` adds the concrete index
+object size to the live tracked allocation count. `LogicalPayloadBytes` is a
+separate estimate of key bytes plus value characters and is not subtracted from
+the allocation totals. The tracker excludes allocations made before the scope,
+including generated datasets and CSV records.
+
+The tracker uses a fixed in-process pointer registry and measures allocations
+made through the benchmark's C++ allocation path during the scoped population.
+It is intentionally not a process working-set probe; allocator bookkeeping and
+allocations made through unrelated APIs are outside the reported fields.
+
+This is an allocation-footprint comparison, not an exact physical-RAM or
+process-working-set measurement. Standard-library allocator metadata and
+implementation details are not reported separately, and the experiment does
+not claim an exact structure-versus-payload split for containers whose internal
+allocations are private. PGM bulk load can have a substantially higher peak
+than its steady-state allocation because of temporary construction vectors.
+
 ## Benchmark Analysis
 
 The reproducible Python analysis script reads `experiment_results.csv` and writes five PNG graphs:
@@ -277,6 +312,8 @@ AdaptiveCore/
       BenchmarkReporter.*
       BenchmarkRunner.*
       DatasetGenerator.*
+      PgmEpsilonExperiment.*
+      MemoryFootprintExperiment.*
     index/
       Index.h
       HashIndex.*
@@ -292,6 +329,8 @@ AdaptiveCore/
     DatasetGeneratorTests.cpp
     IndexTests.cpp
     PGMIndexTests.cpp
+    PgmEpsilonExperimentTests.cpp
+    MemoryFootprintExperimentTests.cpp
   scripts/
     analyze_results.py
   results/
