@@ -1,7 +1,32 @@
 #include "../src/adaptive/AdaptiveIndex.h"
 
 #include <cassert>
+#include <cmath>
 #include <string>
+
+void test_workload_snapshot_features() {
+    WorkloadAnalyzer analyzer(5);
+    const auto empty = analyzer.snapshot();
+    assert(empty.total_operations == 0);
+    assert(empty.insert_ratio == 0.0);
+    assert(empty.write_ratio == 0.0);
+    assert(empty.point_lookup_ratio == 0.0);
+    assert(empty.range_query_ratio == 0.0);
+    assert(empty.delete_ratio == 0.0);
+
+    analyzer.record(OperationType::Insert);
+    analyzer.record(OperationType::PointLookup);
+    analyzer.record(OperationType::RangeQuery);
+    analyzer.record(OperationType::Delete);
+    analyzer.record(OperationType::PointLookup);
+    const auto snapshot = analyzer.snapshot();
+    assert(snapshot.total_operations == 5);
+    assert(std::abs(snapshot.insert_ratio - 0.2) < 1e-12);
+    assert(std::abs(snapshot.write_ratio - 0.4) < 1e-12);
+    assert(std::abs(snapshot.point_lookup_ratio - 0.4) < 1e-12);
+    assert(std::abs(snapshot.range_query_ratio - 0.2) < 1e-12);
+    assert(std::abs(snapshot.delete_ratio - 0.2) < 1e-12);
+}
 
 void test_workload_analyzer() {
     WorkloadAnalyzer analyzer(3);
@@ -27,6 +52,14 @@ void test_policy() {
     assert(policy.choose({0, 1, 3, 0, 4}) == IndexChoice::BPlusTree);
     assert(policy.choose({0, 4, 0, 0, 4}) == IndexChoice::PGM);
     assert(policy.choose({2, 1, 0, 1, 4}) == IndexChoice::Hash);
+
+    WorkloadSnapshot equivalent_snapshot;
+    equivalent_snapshot.point_lookups = 1;
+    equivalent_snapshot.range_queries = 3;
+    equivalent_snapshot.total_operations = 4;
+    equivalent_snapshot.point_lookup_ratio = 0.25;
+    equivalent_snapshot.range_query_ratio = 0.75;
+    assert(policy.choose(equivalent_snapshot) == IndexChoice::BPlusTree);
 }
 
 void test_adaptive_index_operations() {
@@ -51,6 +84,15 @@ void test_hash_to_pgm_switch() {
         index.find(key);
     }
     assert(index.current_choice() == IndexChoice::PGM);
+    const auto decisions = index.decision_events();
+    assert(decisions.size() == 1);
+    assert(decisions[0].operation_number == 4);
+    assert(decisions[0].window_number == 1);
+    assert(decisions[0].active_choice == IndexChoice::Hash);
+    assert(decisions[0].selected_choice == IndexChoice::PGM);
+    assert(decisions[0].workload.total_operations == 4);
+    assert(decisions[0].workload.point_lookup_ratio == 1.0);
+    assert(decisions[0].switch_occurred);
     assert(index.find(100).has_value() == false);
     assert(index.size() == 0);
 }
@@ -92,6 +134,7 @@ void test_cooldown() {
 }
 
 int main() {
+    test_workload_snapshot_features();
     test_workload_analyzer();
     test_policy();
     test_adaptive_index_operations();

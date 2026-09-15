@@ -106,6 +106,23 @@ struct PhaseTiming {
     std::int64_t total_nanoseconds;
 };
 
+std::vector<WorkloadSnapshot> analyze_phases(
+    const std::vector<ChangingWorkloadRequest>& requests,
+    const std::vector<ChangingWorkloadPhase>& phases) {
+    std::vector<WorkloadSnapshot> snapshots;
+    snapshots.reserve(phases.size());
+    for (const auto& phase : phases) {
+        WorkloadAnalyzer analyzer(std::max<std::size_t>(1, phase.end_operation -
+                                                             phase.begin_operation));
+        for (std::size_t operation = phase.begin_operation;
+             operation < phase.end_operation; ++operation) {
+            analyzer.record(requests[operation].operation);
+        }
+        snapshots.push_back(analyzer.snapshot());
+    }
+    return snapshots;
+}
+
 std::vector<PhaseTiming> replay(Index& index,
                                 const std::vector<ChangingWorkloadRequest>& requests,
                                 const std::vector<ChangingWorkloadPhase>& phases,
@@ -138,16 +155,19 @@ ChangingWorkloadRecord make_summary(const ChangingWorkloadPhase& phase,
                                     const std::string& system,
                                     const std::string& active_index,
                                     const PhaseTiming& timing,
-                                    std::size_t switch_count) {
+                                    std::size_t switch_count,
+                                    const WorkloadSnapshot& workload) {
     const auto average = timing.operation_count == 0
                               ? 0
                               : timing.total_nanoseconds /
                                     static_cast<std::int64_t>(
                                         timing.operation_count);
-        return {"Summary", phase.number, phase.name, phase.begin_operation,
+    return {"Summary", phase.number, phase.name, phase.begin_operation,
             phase.end_operation, system, active_index,
             timing.operation_count, timing.total_nanoseconds, average,
-            switch_count, 0, "", "", 0};
+            switch_count, 0, "", "", 0, workload.insert_ratio,
+            workload.point_lookup_ratio, workload.range_query_ratio,
+            workload.delete_ratio, 0};
 }
 
 }  // namespace
@@ -193,13 +213,15 @@ std::vector<ChangingWorkloadRecord> ChangingWorkloadExperiment::run(
     const ChangingWorkloadConfig& config) {
     const auto phases = make_phases(config);
     const auto requests = generate_requests(config);
+    const auto workload_snapshots = analyze_phases(requests, phases);
     std::vector<ChangingWorkloadRecord> records;
 
     BPlusTree bplus_tree;
     const auto bplus_timings = replay(bplus_tree, requests, phases);
     for (std::size_t index = 0; index < phases.size(); ++index) {
         records.push_back(make_summary(phases[index], "BPlusTree", "BPlusTree",
-                                       bplus_timings[index], 0));
+                                       bplus_timings[index], 0,
+                                       workload_snapshots[index]));
     }
 
     PGMIndex pgm_index;
@@ -207,7 +229,7 @@ std::vector<ChangingWorkloadRecord> ChangingWorkloadExperiment::run(
     for (std::size_t index = 0; index < phases.size(); ++index) {
         records.push_back(
             make_summary(phases[index], "PGMIndex", "PGMIndex",
-                         pgm_timings[index], 0));
+                         pgm_timings[index], 0, workload_snapshots[index]));
     }
 
     AdaptiveIndex adaptive_index;
@@ -225,7 +247,8 @@ std::vector<ChangingWorkloadRecord> ChangingWorkloadExperiment::run(
         }
         records.push_back(make_summary(
             phases[index], "AdaptiveIndex", to_string(adaptive_choices[index]),
-            adaptive_timings[index], phase_switches));
+            adaptive_timings[index], phase_switches,
+            workload_snapshots[index]));
     }
 
     for (const auto& event : events) {
@@ -242,7 +265,8 @@ std::vector<ChangingWorkloadRecord> ChangingWorkloadExperiment::run(
                    "AdaptiveIndex", to_string(event.new_choice),
                    event.operation_number, 0, 0, 0,
                            event.operation_number, to_string(event.old_choice),
-                           to_string(event.new_choice), event.duration.count()});
+                           to_string(event.new_choice), event.duration.count(),
+                           0.0, 0.0, 0.0, 0.0, event.window_number});
     }
     return records;
 }
@@ -260,7 +284,8 @@ void ChangingWorkloadExperiment::write_csv(
               "System,ActiveIndex,OperationCount,"
               "TotalNanoseconds,AverageNanoseconds,SwitchCount,"
               "SwitchOperationNumber,SwitchFrom,SwitchTo,"
-              "SwitchDurationNanoseconds\n";
+              "SwitchDurationNanoseconds,InsertRatio,PointLookupRatio,"
+              "RangeQueryRatio,DeleteRatio,SwitchWindowNumber\n";
     for (const auto& record : records) {
         output << record.record_type << ',' << record.phase << ','
                << record.phase_name << ',' << record.phase_begin_operation << ','
@@ -270,7 +295,10 @@ void ChangingWorkloadExperiment::write_csv(
                << ',' << record.switch_count << ','
                << record.switch_operation_number << ',' << record.switch_from
                << ',' << record.switch_to << ','
-               << record.switch_duration_nanoseconds << '\n';
+               << record.switch_duration_nanoseconds << ','
+               << record.insert_ratio << ',' << record.point_lookup_ratio << ','
+               << record.range_query_ratio << ',' << record.delete_ratio << ','
+               << record.switch_window_number << '\n';
     }
     if (!output) {
         throw std::runtime_error(

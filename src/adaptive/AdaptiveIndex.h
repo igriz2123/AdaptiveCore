@@ -14,9 +14,22 @@
 
 struct AdaptiveSwitchEvent {
     std::size_t operation_number;
+    std::size_t window_number;
     IndexChoice old_choice;
     IndexChoice new_choice;
     std::chrono::nanoseconds duration;
+};
+
+struct AdaptiveDecisionEvent {
+    std::size_t operation_number;
+    std::size_t window_number;
+    IndexChoice active_choice;
+    IndexChoice selected_choice;
+    WorkloadSnapshot workload;
+    bool switch_occurred;
+    IndexChoice old_choice;
+    IndexChoice new_choice;
+    std::chrono::nanoseconds switch_duration;
 };
 
 class AdaptiveIndex final : public Index {
@@ -39,6 +52,7 @@ public:
     std::size_t operation_count() const;
     std::size_t switch_count() const;
     std::vector<AdaptiveSwitchEvent> switch_events() const;
+    std::vector<AdaptiveDecisionEvent> decision_events() const;
 
 private:
     void record_and_maybe_switch(OperationType operation) const;
@@ -58,4 +72,5 @@ private:
     mutable std::size_t windows_since_switch_;
     mutable std::size_t operation_count_;
     mutable std::vector<AdaptiveSwitchEvent> switch_events_;
+    mutable std::vector<AdaptiveDecisionEvent> decision_events_;
 };

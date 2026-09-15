@@ -88,6 +88,10 @@ std::vector<AdaptiveSwitchEvent> AdaptiveIndex::switch_events() const {
     return switch_events_;
 }
 
+std::vector<AdaptiveDecisionEvent> AdaptiveIndex::decision_events() const {
+    return decision_events_;
+}
+
 void AdaptiveIndex::record_and_maybe_switch(OperationType operation) const {
     analyzer_.record(operation);
     maybe_switch();
@@ -98,23 +102,34 @@ void AdaptiveIndex::maybe_switch() const {
         return;
     }
 
-    const auto desired_choice = policy_.choose(analyzer_.snapshot());
+    const auto completed_snapshot = analyzer_.snapshot();
+    const auto desired_choice = policy_.choose(completed_snapshot);
     ++completed_windows_;
     ++windows_since_switch_;
 
+    const auto old_choice = current_choice_;
+    auto switch_duration = std::chrono::nanoseconds::zero();
+    bool switched = false;
+
     if (desired_choice != current_choice_ &&
         windows_since_switch_ >= minimum_windows_between_switches_) {
-        const auto old_choice = current_choice_;
         const auto switch_started = std::chrono::steady_clock::now();
         active_index_ = rebuild_index(desired_choice);
         const auto switch_finished = std::chrono::steady_clock::now();
+        switch_duration = std::chrono::duration_cast<std::chrono::nanoseconds>(
+            switch_finished - switch_started);
         current_choice_ = desired_choice;
         windows_since_switch_ = 0;
-        switch_events_.push_back({
-            operation_count_, old_choice, desired_choice,
-            std::chrono::duration_cast<std::chrono::nanoseconds>(
-                switch_finished - switch_started)});
+        switched = true;
+        switch_events_.push_back({operation_count_, completed_windows_,
+                                  old_choice, desired_choice, switch_duration});
     }
+
+    decision_events_.push_back({operation_count_, completed_windows_, old_choice,
+                                desired_choice, completed_snapshot, switched,
+                                old_choice,
+                                switched ? desired_choice : old_choice,
+                                switch_duration});
 
     analyzer_.reset_window();
 }

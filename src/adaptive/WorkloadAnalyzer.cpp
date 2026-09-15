@@ -32,7 +32,19 @@ bool WorkloadAnalyzer::window_complete() const {
 }
 
 WorkloadSnapshot WorkloadAnalyzer::snapshot() const {
-    return snapshot_;
+    auto result = snapshot_;
+    if (result.total_operations == 0) {
+        return result;
+    }
+
+    const auto total = static_cast<double>(result.total_operations);
+    result.insert_ratio = static_cast<double>(result.inserts) / total;
+    result.write_ratio = static_cast<double>(result.inserts + result.deletes) /
+                         total;
+    result.point_lookup_ratio = static_cast<double>(result.point_lookups) / total;
+    result.range_query_ratio = static_cast<double>(result.range_queries) / total;
+    result.delete_ratio = static_cast<double>(result.deletes) / total;
+    return result;
 }
 
 void WorkloadAnalyzer::reset_window() {

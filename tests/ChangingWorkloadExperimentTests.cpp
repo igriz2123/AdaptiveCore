@@ -47,6 +47,24 @@ void test_fixed_indexes_remain_fixed() {
     }
 }
 
+void test_experiment_measurements_are_deterministic() {
+    ChangingWorkloadConfig config;
+    config.phase_lengths = {{8, 8, 8, 8, 8}};
+    const auto first = ChangingWorkloadExperiment::run(config);
+    const auto second = ChangingWorkloadExperiment::run(config);
+    assert(first.size() == second.size());
+    for (std::size_t index = 0; index < first.size(); ++index) {
+        assert(first[index].record_type == second[index].record_type);
+        assert(first[index].phase == second[index].phase);
+        assert(first[index].system == second[index].system);
+        assert(first[index].operation_count == second[index].operation_count);
+        assert(first[index].insert_ratio == second[index].insert_ratio);
+        assert(first[index].point_lookup_ratio == second[index].point_lookup_ratio);
+        assert(first[index].range_query_ratio == second[index].range_query_ratio);
+        assert(first[index].delete_ratio == second[index].delete_ratio);
+    }
+}
+
 void test_adaptive_switch_events() {
     AdaptiveIndex index(4, 0);
     for (int key = 0; key < 4; ++key) {
@@ -59,9 +77,11 @@ void test_adaptive_switch_events() {
     const auto events = index.switch_events();
     assert(index.switch_count() == 2);
     assert(events[0].operation_number == 4);
+    assert(events[0].window_number == 1);
     assert(events[0].old_choice == IndexChoice::Hash);
     assert(events[0].new_choice == IndexChoice::PGM);
     assert(events[1].operation_number == 8);
+    assert(events[1].window_number == 2);
     assert(events[1].old_choice == IndexChoice::PGM);
     assert(events[1].new_choice == IndexChoice::BPlusTree);
     assert(events[0].duration.count() >= 0);
@@ -82,13 +102,16 @@ void test_csv_output() {
     std::string row;
     assert(std::getline(input, row));
     assert(row.find("Summary,") == 0);
-    assert(std::count(row.begin(), row.end(), ',') == 14);
+    assert(std::count(row.begin(), row.end(), ',') == 19);
+    assert(header.find("InsertRatio") != std::string::npos);
+    assert(header.find("SwitchWindowNumber") != std::string::npos);
 }
 
 int main() {
     test_phase_boundaries();
     test_request_generation_is_deterministic();
     test_fixed_indexes_remain_fixed();
+    test_experiment_measurements_are_deterministic();
     test_adaptive_switch_events();
     test_csv_output();
     return 0;

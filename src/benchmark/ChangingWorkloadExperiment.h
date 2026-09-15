@@ -44,6 +44,11 @@ struct ChangingWorkloadRecord {
     std::string switch_from;
     std::string switch_to;
     std::int64_t switch_duration_nanoseconds;
+    double insert_ratio;
+    double point_lookup_ratio;
+    double range_query_ratio;
+    double delete_ratio;
+    std::size_t switch_window_number;
 };
 
 class ChangingWorkloadExperiment {

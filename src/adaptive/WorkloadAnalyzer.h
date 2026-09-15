@@ -15,6 +15,11 @@ struct WorkloadSnapshot {
     std::size_t range_queries = 0;
     std::size_t deletes = 0;
     std::size_t total_operations = 0;
+    double insert_ratio = 0.0;
+    double write_ratio = 0.0;
+    double point_lookup_ratio = 0.0;
+    double range_query_ratio = 0.0;
+    double delete_ratio = 0.0;
 };
 
 class WorkloadAnalyzer {
