@@ -26,13 +26,13 @@ void AdaptiveIndex::insert(int key, const std::string& value) {
         ++operation_count_;
     canonical_data_[key] = value;
     active_index_->insert(key, value);
-    record_and_maybe_switch(OperationType::Insert);
+    record_and_maybe_switch(OperationType::Insert, key);
 }
 
 std::optional<std::string> AdaptiveIndex::find(int key) const {
     ++operation_count_;
     const auto result = active_index_->find(key);
-    record_and_maybe_switch(OperationType::PointLookup);
+    record_and_maybe_switch(OperationType::PointLookup, key);
     return result;
 }
 
@@ -48,7 +48,7 @@ bool AdaptiveIndex::erase(int key) {
     if (!erased) {
         return false;
     }
-    record_and_maybe_switch(OperationType::Delete);
+    record_and_maybe_switch(OperationType::Delete, key);
     return true;
 }
 
@@ -56,7 +56,7 @@ std::vector<Index::Entry> AdaptiveIndex::range(int lower_key,
                                                int upper_key) const {
     ++operation_count_;
     const auto result = active_index_->range(lower_key, upper_key);
-    record_and_maybe_switch(OperationType::RangeQuery);
+    record_range_and_maybe_switch(lower_key, upper_key);
     return result;
 }
 
@@ -92,8 +92,15 @@ std::vector<AdaptiveDecisionEvent> AdaptiveIndex::decision_events() const {
     return decision_events_;
 }
 
-void AdaptiveIndex::record_and_maybe_switch(OperationType operation) const {
-    analyzer_.record(operation);
+void AdaptiveIndex::record_and_maybe_switch(OperationType operation,
+                                            int key) const {
+    analyzer_.record(operation, key);
+    maybe_switch();
+}
+
+void AdaptiveIndex::record_range_and_maybe_switch(int lower_key,
+                                                  int upper_key) const {
+    analyzer_.record_range(lower_key, upper_key);
     maybe_switch();
 }
 
@@ -122,7 +129,8 @@ void AdaptiveIndex::maybe_switch() const {
         windows_since_switch_ = 0;
         switched = true;
         switch_events_.push_back({operation_count_, completed_windows_,
-                                  old_choice, desired_choice, switch_duration});
+                      old_choice, desired_choice, switch_duration,
+                      completed_snapshot});
     }
 
     decision_events_.push_back({operation_count_, completed_windows_, old_choice,

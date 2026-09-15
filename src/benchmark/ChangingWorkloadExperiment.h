@@ -49,6 +49,15 @@ struct ChangingWorkloadRecord {
     double range_query_ratio;
     double delete_ratio;
     std::size_t switch_window_number;
+    std::size_t observed_key_count;
+    std::size_t distinct_key_count;
+    int minimum_key;
+    int maximum_key;
+    std::int64_t key_span;
+    double key_mean;
+    double key_variance;
+    double key_monotonicity;
+    double key_concentration;
 };
 
 class ChangingWorkloadExperiment {

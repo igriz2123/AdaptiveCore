@@ -62,6 +62,10 @@ void test_experiment_measurements_are_deterministic() {
         assert(first[index].point_lookup_ratio == second[index].point_lookup_ratio);
         assert(first[index].range_query_ratio == second[index].range_query_ratio);
         assert(first[index].delete_ratio == second[index].delete_ratio);
+        assert(first[index].observed_key_count == second[index].observed_key_count);
+        assert(first[index].distinct_key_count == second[index].distinct_key_count);
+        assert(first[index].key_span == second[index].key_span);
+        assert(first[index].key_concentration == second[index].key_concentration);
     }
 }
 
@@ -102,9 +106,11 @@ void test_csv_output() {
     std::string row;
     assert(std::getline(input, row));
     assert(row.find("Summary,") == 0);
-    assert(std::count(row.begin(), row.end(), ',') == 19);
+    assert(std::count(row.begin(), row.end(), ',') == 28);
     assert(header.find("InsertRatio") != std::string::npos);
     assert(header.find("SwitchWindowNumber") != std::string::npos);
+    assert(header.find("DistinctKeyCount") != std::string::npos);
+    assert(header.find("KeyMonotonicity") != std::string::npos);
 }
 
 int main() {

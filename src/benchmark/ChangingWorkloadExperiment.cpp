@@ -106,6 +106,18 @@ struct PhaseTiming {
     std::int64_t total_nanoseconds;
 };
 
+void record_request(WorkloadAnalyzer& analyzer,
+                    const ChangingWorkloadRequest& request) {
+    switch (request.operation) {
+    case OperationType::RangeQuery:
+        analyzer.record_range(request.key, request.upper_key);
+        break;
+    default:
+        analyzer.record(request.operation, request.key);
+        break;
+    }
+}
+
 std::vector<WorkloadSnapshot> analyze_phases(
     const std::vector<ChangingWorkloadRequest>& requests,
     const std::vector<ChangingWorkloadPhase>& phases) {
@@ -116,7 +128,7 @@ std::vector<WorkloadSnapshot> analyze_phases(
                                                              phase.begin_operation));
         for (std::size_t operation = phase.begin_operation;
              operation < phase.end_operation; ++operation) {
-            analyzer.record(requests[operation].operation);
+            record_request(analyzer, requests[operation]);
         }
         snapshots.push_back(analyzer.snapshot());
     }
@@ -167,7 +179,11 @@ ChangingWorkloadRecord make_summary(const ChangingWorkloadPhase& phase,
             timing.operation_count, timing.total_nanoseconds, average,
             switch_count, 0, "", "", 0, workload.insert_ratio,
             workload.point_lookup_ratio, workload.range_query_ratio,
-            workload.delete_ratio, 0};
+            workload.delete_ratio, 0, workload.observed_key_count,
+            workload.distinct_key_count, workload.minimum_key,
+            workload.maximum_key, workload.key_span, workload.key_mean,
+            workload.key_variance, workload.key_monotonicity,
+            workload.key_concentration};
 }
 
 }  // namespace
@@ -266,7 +282,15 @@ std::vector<ChangingWorkloadRecord> ChangingWorkloadExperiment::run(
                    event.operation_number, 0, 0, 0,
                            event.operation_number, to_string(event.old_choice),
                            to_string(event.new_choice), event.duration.count(),
-                           0.0, 0.0, 0.0, 0.0, event.window_number});
+                           0.0, 0.0, 0.0, 0.0, event.window_number,
+                           event.workload.observed_key_count,
+                           event.workload.distinct_key_count,
+                           event.workload.minimum_key,
+                           event.workload.maximum_key,
+                           event.workload.key_span, event.workload.key_mean,
+                           event.workload.key_variance,
+                           event.workload.key_monotonicity,
+                           event.workload.key_concentration});
     }
     return records;
 }
@@ -285,7 +309,9 @@ void ChangingWorkloadExperiment::write_csv(
               "TotalNanoseconds,AverageNanoseconds,SwitchCount,"
               "SwitchOperationNumber,SwitchFrom,SwitchTo,"
               "SwitchDurationNanoseconds,InsertRatio,PointLookupRatio,"
-              "RangeQueryRatio,DeleteRatio,SwitchWindowNumber\n";
+              "RangeQueryRatio,DeleteRatio,SwitchWindowNumber,"
+              "ObservedKeyCount,DistinctKeyCount,MinimumKey,MaximumKey,"
+              "KeySpan,KeyMean,KeyVariance,KeyMonotonicity,KeyConcentration\n";
     for (const auto& record : records) {
         output << record.record_type << ',' << record.phase << ','
                << record.phase_name << ',' << record.phase_begin_operation << ','
@@ -298,7 +324,12 @@ void ChangingWorkloadExperiment::write_csv(
                << record.switch_duration_nanoseconds << ','
                << record.insert_ratio << ',' << record.point_lookup_ratio << ','
                << record.range_query_ratio << ',' << record.delete_ratio << ','
-               << record.switch_window_number << '\n';
+               << record.switch_window_number << ',' << record.observed_key_count
+               << ',' << record.distinct_key_count << ',' << record.minimum_key
+               << ',' << record.maximum_key << ',' << record.key_span << ','
+               << record.key_mean << ',' << record.key_variance << ','
+               << record.key_monotonicity << ',' << record.key_concentration
+               << '\n';
     }
     if (!output) {
         throw std::runtime_error(

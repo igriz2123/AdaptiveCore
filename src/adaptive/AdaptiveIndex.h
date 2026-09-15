@@ -18,6 +18,7 @@ struct AdaptiveSwitchEvent {
     IndexChoice old_choice;
     IndexChoice new_choice;
     std::chrono::nanoseconds duration;
+    WorkloadSnapshot workload;
 };
 
 struct AdaptiveDecisionEvent {
@@ -55,7 +56,8 @@ public:
     std::vector<AdaptiveDecisionEvent> decision_events() const;
 
 private:
-    void record_and_maybe_switch(OperationType operation) const;
+    void record_and_maybe_switch(OperationType operation, int key) const;
+    void record_range_and_maybe_switch(int lower_key, int upper_key) const;
     void maybe_switch() const;
     std::unique_ptr<Index> create_index(IndexChoice choice) const;
     std::unique_ptr<Index> rebuild_index(IndexChoice choice) const;

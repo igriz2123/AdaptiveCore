@@ -28,6 +28,47 @@ void test_workload_snapshot_features() {
     assert(std::abs(snapshot.delete_ratio - 0.2) < 1e-12);
 }
 
+void test_key_distribution_features() {
+    WorkloadAnalyzer uniform_like(4);
+    uniform_like.record(OperationType::PointLookup, 10);
+    uniform_like.record(OperationType::PointLookup, 40);
+    uniform_like.record(OperationType::PointLookup, 20);
+    uniform_like.record(OperationType::PointLookup, 30);
+    const auto uniform_snapshot = uniform_like.snapshot();
+    assert(uniform_snapshot.observed_key_count == 4);
+    assert(uniform_snapshot.distinct_key_count == 4);
+    assert(uniform_snapshot.minimum_key == 10);
+    assert(uniform_snapshot.maximum_key == 40);
+    assert(uniform_snapshot.key_span == 30);
+    assert(std::abs(uniform_snapshot.key_mean - 25.0) < 1e-12);
+    assert(std::abs(uniform_snapshot.key_variance - 125.0) < 1e-12);
+    assert(uniform_snapshot.key_monotonicity < 1.0);
+    assert(std::abs(uniform_snapshot.key_concentration - 0.25) < 1e-12);
+
+    WorkloadAnalyzer hot_keys(4);
+    for (int operation = 0; operation < 4; ++operation) {
+        hot_keys.record(OperationType::PointLookup, 7);
+    }
+    const auto hot_snapshot = hot_keys.snapshot();
+    assert(hot_snapshot.observed_key_count == 4);
+    assert(hot_snapshot.distinct_key_count == 1);
+    assert(hot_snapshot.key_variance == 0.0);
+    assert(hot_snapshot.key_concentration == 1.0);
+    assert(hot_snapshot.key_concentration > uniform_snapshot.key_concentration);
+
+    WorkloadAnalyzer sequential(4);
+    for (int key = 1; key <= 4; ++key) {
+        sequential.record(OperationType::PointLookup, key);
+    }
+    assert(sequential.snapshot().key_monotonicity == 1.0);
+
+    WorkloadAnalyzer range_analyzer(1);
+    range_analyzer.record_range(5, 9);
+    assert(range_analyzer.snapshot().observed_key_count == 2);
+    assert(range_analyzer.snapshot().minimum_key == 5);
+    assert(range_analyzer.snapshot().maximum_key == 9);
+}
+
 void test_workload_analyzer() {
     WorkloadAnalyzer analyzer(3);
     analyzer.record(OperationType::Insert);
@@ -92,6 +133,10 @@ void test_hash_to_pgm_switch() {
     assert(decisions[0].selected_choice == IndexChoice::PGM);
     assert(decisions[0].workload.total_operations == 4);
     assert(decisions[0].workload.point_lookup_ratio == 1.0);
+    assert(decisions[0].workload.observed_key_count == 4);
+    assert(decisions[0].workload.distinct_key_count == 4);
+    assert(decisions[0].workload.minimum_key == 0);
+    assert(decisions[0].workload.maximum_key == 3);
     assert(decisions[0].switch_occurred);
     assert(index.find(100).has_value() == false);
     assert(index.size() == 0);
@@ -135,6 +180,7 @@ void test_cooldown() {
 
 int main() {
     test_workload_snapshot_features();
+    test_key_distribution_features();
     test_workload_analyzer();
     test_policy();
     test_adaptive_index_operations();
