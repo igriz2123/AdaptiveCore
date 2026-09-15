@@ -166,6 +166,62 @@ The extra operation is BulkLoad, which exists only for PGMIndex.
 
 The experiment prints progress for each dataset size and workload and reports total orchestration wall-clock time. Large runs can be slow because normal PGM insertion and deletion still involve expensive sorted-vector/model work.
 
+### Final Adaptation Effectiveness Evaluation
+
+Run the continuous changing-workload evaluation with:
+
+```powershell
+.\build\AdaptiveCoreBenchmark.exe --changing-workload --output changing_workload_results.csv
+python scripts/analyze_changing_workload.py --input changing_workload_results.csv
+```
+
+This is the direct comparison between fixed `BPlusTree`, fixed `PGMIndex`, and
+`AdaptiveIndex`. All three replay the same deterministic request stream; no
+construction or initial bulk-load time is included in request latency.
+
+The stream has five contiguous 256-operation phases by default: `Uniform`,
+`HighlySkewed`, `Sequential`, `Mixed`, and `UniformAgain`. The labels are
+experiment metadata only: `WorkloadAnalyzer` receives operations and observed
+keys, never phase labels.
+
+The CSV preserves the earlier phase-summary and switch-event columns and adds
+adaptation metrics. A phase change is the first operation after a phase's
+`PhaseBeginOperation`. Detection is the first completed AdaptiveIndex analysis
+window strictly after that boundary; `DetectionDelayOperations` is the distance
+between those operation numbers. It is intentionally an operation-count metric,
+not a wall-clock claim.
+
+Each `Switch` row includes the old/new index, rebuild duration, and averages
+over 32 requests immediately before and immediately after the triggering
+request (the triggering request is excluded from both windows). The phase
+summary latency includes switching work because it is a real cost paid while
+serving the stream; one-time initial construction is excluded.
+
+`UpdateThroughput` rows report insert and delete throughput as
+`OperationCount / elapsed_seconds`, derived from the timed requests for each
+phase and system. Adaptive-to-baseline percentage fields are latency
+differences, so a positive value means AdaptiveIndex was slower.
+
+A switch is classified as potentially false when either (a) the deterministic
+policy choice for the following 32-request evaluation window differs from the
+selected index, or (b) it immediately reverses to the old index within that
+window with no intervening phase boundary. `FalseSwitchRate` is false switches
+divided by evaluated switches. This is a small deterministic diagnostic, not a
+statistical proof of causality.
+
+The analysis script writes these research graphs under `results/graphs/`:
+
+- `changing_workload_phase_latency.png`
+- `adaptive_switch_timeline.png`
+- `adaptive_pre_post_switch_latency.png`
+- `changing_workload_update_throughput.png`
+- `adaptive_relative_to_baselines.png`
+
+The experiment is a single deterministic in-process run. Nanosecond timings
+can vary across machines and runs, and the results do not establish that the
+adaptive approach is universally better. In particular, rebuild costs, the
+simple policy, and the educational PGM implementation limit any broader claim.
+
 ## Building
 
 Requirements:

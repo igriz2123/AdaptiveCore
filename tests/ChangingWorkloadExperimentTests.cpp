@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cmath>
 #include <fstream>
 #include <string>
 
@@ -106,11 +107,74 @@ void test_csv_output() {
     std::string row;
     assert(std::getline(input, row));
     assert(row.find("Summary,") == 0);
-    assert(std::count(row.begin(), row.end(), ',') == 28);
+    assert(std::count(row.begin(), row.end(), ',') ==
+           std::count(header.begin(), header.end(), ','));
     assert(header.find("InsertRatio") != std::string::npos);
     assert(header.find("SwitchWindowNumber") != std::string::npos);
     assert(header.find("DistinctKeyCount") != std::string::npos);
     assert(header.find("KeyMonotonicity") != std::string::npos);
+    assert(header.find("PhaseChangeOperation") != std::string::npos);
+    assert(header.find("DetectionDelayOperations") != std::string::npos);
+    assert(header.find("PreSwitchAverageNanoseconds") != std::string::npos);
+    assert(header.find("OperationsPerSecond") != std::string::npos);
+    assert(header.find("FalseSwitchRate") != std::string::npos);
+}
+
+void test_adaptation_effectiveness_metrics() {
+    ChangingWorkloadConfig config;
+    config.phase_lengths = {{64, 64, 64, 64, 64}};
+    config.operation_window = 16;
+    config.minimum_windows_between_switches = 0;
+    config.switch_evaluation_window = 8;
+    const auto records = ChangingWorkloadExperiment::run(config);
+
+    std::size_t summaries = 0;
+    std::size_t update_records = 0;
+    std::size_t switches = 0;
+    for (const auto& record : records) {
+        if (record.record_type == "Summary") {
+            ++summaries;
+            if (record.system == "AdaptiveIndex" && record.phase > 1) {
+                assert(record.phase_change_operation.has_value());
+                assert(record.detection_operation.has_value());
+                assert(record.detection_delay_operations.has_value());
+                assert(*record.detection_operation > *record.phase_change_operation);
+                assert(*record.detection_delay_operations >= config.operation_window);
+                assert(*record.detection_delay_operations >= 0);
+                assert(record.total_switches.has_value());
+                assert(record.false_switch_count.has_value());
+                assert(record.false_switch_rate.has_value());
+                assert(*record.false_switch_rate >= 0.0);
+                assert(*record.false_switch_rate <= 1.0);
+                assert(record.adaptive_vs_bplus_percent.has_value());
+                assert(record.adaptive_vs_pgm_percent.has_value());
+            }
+        } else if (record.record_type == "UpdateThroughput") {
+            ++update_records;
+            assert(record.measured_operation == "Insert" ||
+                   record.measured_operation == "Delete");
+            if (record.operation_count == 0) {
+                assert(!record.operations_per_second.has_value());
+            } else {
+                assert(record.operations_per_second.has_value());
+                assert(*record.operations_per_second > 0.0);
+                const auto expected = static_cast<double>(record.operation_count) *
+                                      1'000'000'000.0 / record.total_nanoseconds;
+                assert(std::abs(*record.operations_per_second - expected) < 1e-6);
+            }
+        } else if (record.record_type == "Switch") {
+            ++switches;
+            assert(!record.switch_from.empty());
+            assert(!record.switch_to.empty());
+            assert(record.pre_switch_average_nanoseconds.has_value());
+            assert(record.post_switch_average_nanoseconds.has_value());
+            assert(record.false_switch.has_value());
+        }
+    }
+    assert(summaries == 15);
+    assert(update_records == 30);
+    assert(switches > 0);
+    assert(records.size() == summaries + update_records + switches);
 }
 
 int main() {
@@ -120,5 +184,6 @@ int main() {
     test_experiment_measurements_are_deterministic();
     test_adaptive_switch_events();
     test_csv_output();
+    test_adaptation_effectiveness_metrics();
     return 0;
 }

@@ -5,6 +5,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -26,6 +27,9 @@ struct ChangingWorkloadConfig {
     std::array<std::size_t, 5> phase_lengths{{256, 256, 256, 256, 256}};
     std::uint32_t seed = 20260915;
     int key_space = 10000;
+    std::size_t operation_window = 64;
+    std::size_t minimum_windows_between_switches = 2;
+    std::size_t switch_evaluation_window = 32;
 };
 
 struct ChangingWorkloadRecord {
@@ -58,6 +62,21 @@ struct ChangingWorkloadRecord {
     double key_variance;
     double key_monotonicity;
     double key_concentration;
+    std::string measured_operation;
+    std::optional<std::size_t> phase_change_operation;
+    std::optional<std::size_t> detection_operation;
+    std::optional<std::size_t> detection_delay_operations;
+    std::optional<std::int64_t> pre_switch_average_nanoseconds;
+    std::optional<std::int64_t> post_switch_average_nanoseconds;
+    std::optional<double> latency_change_percent;
+    std::optional<double> switch_overhead_percent;
+    std::optional<std::size_t> total_switches;
+    std::optional<std::size_t> false_switch_count;
+    std::optional<double> false_switch_rate;
+    std::optional<double> operations_per_second;
+    std::optional<double> adaptive_vs_bplus_percent;
+    std::optional<double> adaptive_vs_pgm_percent;
+    std::optional<bool> false_switch;
 };
 
 class ChangingWorkloadExperiment {

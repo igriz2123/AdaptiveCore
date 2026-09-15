@@ -40,15 +40,16 @@ bool AdaptiveIndex::erase(int key) {
     ++operation_count_;
     const auto existing = canonical_data_.find(key);
     if (existing == canonical_data_.end()) {
+        record_and_maybe_switch(OperationType::Delete, key);
         return false;
     }
 
     canonical_data_.erase(existing);
     const bool erased = active_index_->erase(key);
+    record_and_maybe_switch(OperationType::Delete, key);
     if (!erased) {
         return false;
     }
-    record_and_maybe_switch(OperationType::Delete, key);
     return true;
 }
 

@@ -119,6 +119,17 @@ void test_adaptive_index_operations() {
     assert(index.size() == 2);
 }
 
+void test_failed_deletes_are_analyzed() {
+    AdaptiveIndex index(4, 0);
+    for (int key = 0; key < 4; ++key) {
+        assert(!index.erase(key));
+    }
+    const auto decisions = index.decision_events();
+    assert(decisions.size() == 1);
+    assert(decisions[0].workload.deletes == 4);
+    assert(decisions[0].workload.total_operations == 4);
+}
+
 void test_hash_to_pgm_switch() {
     AdaptiveIndex index(4, 0);
     for (int key = 0; key < 4; ++key) {
@@ -184,6 +195,7 @@ int main() {
     test_workload_analyzer();
     test_policy();
     test_adaptive_index_operations();
+    test_failed_deletes_are_analyzed();
     test_hash_to_pgm_switch();
     test_pgm_to_bplus_to_hash_switches();
     test_cooldown();
